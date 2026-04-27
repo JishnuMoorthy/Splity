@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Block commits that contain known secret patterns.
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+bad=0
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    .env|.env.*) echo "✖ refusing to commit env file: $f"; bad=1; continue;;
+    *.pem) echo "✖ refusing to commit pem file: $f"; bad=1; continue;;
+    .githooks/*|*.md) continue;;
+  esac
+  # Look for high-signal secret values in added lines only
+  if git diff --cached -- "$f" | grep -E "^\+" \
+      | grep -E "(sb_secret_[A-Za-z0-9_-]{20}|sk-ant-api[0-9]+-[A-Za-z0-9_-]{30}|eyJhbGciOi[A-Za-z0-9_-]{60})" \
+      >/dev/null 2>&1; then
+    echo "✖ refusing to commit: secret-looking value in $f"
+    bad=1
+  fi
+done <<< "$staged"
+
+if [ $bad -ne 0 ]; then
+  echo ""
+  echo "If this is a false positive, bypass with: git commit --no-verify"
+  exit 1
+fi
