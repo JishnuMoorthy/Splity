@@ -1,0 +1,125 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { formatCents } from "@/lib/money";
+import { venmoUrl, cashAppUrl } from "@/lib/payment-links";
+import type { PublicBill } from "@/lib/types";
+
+export function PayScreen({
+  bill,
+  amountCents,
+  claimId,
+}: {
+  bill: PublicBill;
+  amountCents: number;
+  claimId: string | null;
+}) {
+  const [sessionId, setSessionId] = useState("");
+  const [paid, setPaid] = useState(false);
+  const [zelleCopied, setZelleCopied] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSessionId(localStorage.getItem("splity-session-id") ?? "");
+  }, []);
+
+  const note = `${bill.restaurant_name ?? "Splity"} (via Splity)`;
+
+  async function markPaid(method: "venmo" | "zelle" | "cashapp") {
+    setPaid(true);
+    if (!claimId || !sessionId) return;
+    await fetch("/api/claims", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claim_id: claimId,
+        claimer_session_id: sessionId,
+        payment_method: method,
+        paid: true,
+      }),
+    }).catch(() => {});
+  }
+
+  async function copyZelle() {
+    const target = bill.payer.zelle_contact;
+    if (!target) return;
+    await navigator.clipboard.writeText(target).catch(() => {});
+    setZelleCopied(true);
+    setTimeout(() => setZelleCopied(false), 2000);
+  }
+
+  return (
+    <div className="reveal mt-2">
+      <div className="text-[var(--color-muted)] text-sm">You owe</div>
+      <div className="font-display text-5xl mt-1 text-[var(--color-ink)] font-mono">
+        {formatCents(amountCents)}
+      </div>
+      <div className="text-[var(--color-muted)] mt-2">
+        to {bill.payer.display_name}
+        {bill.restaurant_name ? ` for ${bill.restaurant_name}` : ""}
+      </div>
+
+      <div className="mt-10 space-y-3">
+        {bill.payer.venmo_handle ? (
+          <a
+            href={venmoUrl({
+              handle: bill.payer.venmo_handle,
+              amountCents,
+              note,
+            })}
+            onClick={() => markPaid("venmo")}
+            className="tap flex items-center justify-between px-5 py-4 rounded-[var(--radius-md)] bg-[#3D95CE] text-white font-medium shadow-[var(--shadow-soft)]"
+          >
+            <span>Pay on Venmo</span>
+            <span className="font-mono">{formatCents(amountCents)}</span>
+          </a>
+        ) : null}
+
+        {bill.payer.cashapp_handle ? (
+          <a
+            href={cashAppUrl({
+              handle: bill.payer.cashapp_handle,
+              amountCents,
+            })}
+            onClick={() => markPaid("cashapp")}
+            className="tap flex items-center justify-between px-5 py-4 rounded-[var(--radius-md)] bg-[#00D54B] text-white font-medium shadow-[var(--shadow-soft)]"
+          >
+            <span>Pay on Cash App</span>
+            <span className="font-mono">{formatCents(amountCents)}</span>
+          </a>
+        ) : null}
+
+        {bill.payer.zelle_contact ? (
+          <button
+            type="button"
+            onClick={() => {
+              copyZelle();
+              markPaid("zelle");
+            }}
+            className="tap w-full flex items-center justify-between px-5 py-4 rounded-[var(--radius-md)] bg-[#6D1ED4] text-white font-medium shadow-[var(--shadow-soft)]"
+          >
+            <span className="text-left">
+              <div>Pay on Zelle</div>
+              <div className="text-xs opacity-80 mt-0.5 font-mono">
+                {zelleCopied
+                  ? "Copied!"
+                  : `Tap to copy: ${bill.payer.zelle_contact}`}
+              </div>
+            </span>
+            <span className="font-mono">{formatCents(amountCents)}</span>
+          </button>
+        ) : null}
+      </div>
+
+      {paid ? (
+        <p className="mt-6 text-center text-sm text-[var(--color-success)]">
+          Marked as paid. Thanks!
+        </p>
+      ) : (
+        <p className="mt-8 text-center text-xs text-[var(--color-muted)]">
+          Already sent it? Tap any button above to mark as paid.
+        </p>
+      )}
+    </div>
+  );
+}
