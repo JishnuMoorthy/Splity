@@ -27,7 +27,7 @@ export async function createBillAction(payloadJson: string) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/phone");
+  if (!user) redirect("/auth");
 
   const { data: payer } = await supabase
     .from("payers")

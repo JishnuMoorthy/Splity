@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
-import { MoneyDisplay } from "@/components/MoneyDisplay";
 import { signOutAction } from "./actions";
+import { BillCard } from "./BillCard";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default async function MePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/phone");
+  if (!user) redirect("/auth");
 
   const { data: payer } = await supabase
     .from("payers")
@@ -66,37 +66,7 @@ export default async function MePage() {
             No bills yet. Upload a receipt to get started.
           </p>
         ) : (
-          bills.map((b) => (
-            <Link
-              key={b.id}
-              href={`/b/${b.short_id}`}
-              className="tap block p-4 rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">
-                    {b.restaurant_name ?? "Receipt"}
-                  </div>
-                  <div className="text-xs text-[var(--color-muted)] mt-0.5">
-                    {new Date(b.created_at).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}{" "}
-                    · /{b.short_id}
-                  </div>
-                </div>
-                <MoneyDisplay
-                  cents={b.total_cents}
-                  className="text-[var(--color-ink)]"
-                />
-              </div>
-              {appUrl ? (
-                <div className="mt-2 text-xs text-[var(--color-muted)] truncate">
-                  {appUrl}/b/{b.short_id}
-                </div>
-              ) : null}
-            </Link>
-          ))
+          bills.map((b) => <BillCard key={b.id} bill={b} appUrl={appUrl} />)
         )}
       </div>
     </AppShell>

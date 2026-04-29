@@ -27,6 +27,7 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Splity",
   },
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {

@@ -15,7 +15,7 @@ export async function upsertPayerAction(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/phone");
+  if (!user) redirect("/auth");
 
   const display_name = String(formData.get("display_name") ?? "").trim();
   const venmo_handle =
@@ -36,7 +36,8 @@ export async function upsertPayerAction(formData: FormData) {
   const { error } = await supabase.from("payers").upsert(
     {
       user_id: user.id,
-      phone: user.phone ?? "",
+      phone: user.phone ?? null,
+      email: user.email ?? null,
       display_name,
       venmo_handle,
       zelle_contact,
