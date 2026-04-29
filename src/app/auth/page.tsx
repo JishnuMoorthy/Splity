@@ -1,15 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { AppShell } from "@/components/AppShell";
 
 export default function AuthPage() {
+  return (
+    <Suspense fallback={<AppShell back="/" title="Sign in"><div /></AppShell>}>
+      <AuthInner />
+    </Suspense>
+  );
+}
+
+function AuthInner() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    const e = searchParams.get("error");
+    if (e) setError(e);
+  }, [searchParams]);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();

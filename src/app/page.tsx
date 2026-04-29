@@ -1,8 +1,22 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { AuthBootstrap } from "@/components/AuthBootstrap";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  // If we already have a session cookie, skip the landing entirely.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) redirect("/me");
+
   return (
     <main className="flex-1 flex flex-col">
+      {/* Hash-fragment fallback for magic-link returns that bypass /auth/callback */}
+      <AuthBootstrap />
       <header className="px-6 pt-8 pb-4 reveal">
         <div className="font-display text-2xl tracking-tight text-[var(--color-ink)]">
           Splity
