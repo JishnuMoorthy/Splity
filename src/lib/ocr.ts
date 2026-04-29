@@ -38,11 +38,37 @@ Rules:
 - Do not invent items not present on the receipt.
 - If a single line shows quantity > 1 with a unit price, set quantity accordingly and price_cents to the LINE total.`;
 
+export type ReceiptMediaType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp"
+  | "image/gif"
+  | "application/pdf";
+
 export async function parseReceipt(opts: {
-  imageBase64: string;
-  mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+  fileBase64: string;
+  mediaType: ReceiptMediaType;
 }): Promise<ParsedReceipt> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+  const fileBlock =
+    opts.mediaType === "application/pdf"
+      ? ({
+          type: "document" as const,
+          source: {
+            type: "base64" as const,
+            media_type: "application/pdf" as const,
+            data: opts.fileBase64,
+          },
+        })
+      : ({
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: opts.mediaType,
+            data: opts.fileBase64,
+          },
+        });
 
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
@@ -50,17 +76,7 @@ export async function parseReceipt(opts: {
     messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: opts.mediaType,
-              data: opts.imageBase64,
-            },
-          },
-          { type: "text", text: PARSING_PROMPT },
-        ],
+        content: [fileBlock, { type: "text", text: PARSING_PROMPT }],
       },
     ],
   });

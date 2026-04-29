@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { generateShortId } from "@/lib/short-id";
 import { ParsedReceiptSchema } from "@/lib/ocr";
@@ -27,14 +26,15 @@ export async function createBillAction(payloadJson: string) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/auth");
+  if (!user) return { error: "Not signed in. Refresh and sign in again." };
 
-  const { data: payer } = await supabase
+  const { data: payer, error: payerErr } = await supabase
     .from("payers")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!payer) redirect("/me/payment-methods?first=1");
+  if (payerErr) return { error: `Payer lookup failed: ${payerErr.message}` };
+  if (!payer) return { error: "Set up payment methods first.", redirect: "/me/payment-methods?first=1" };
 
   let parsed: z.infer<typeof CreateBillSchema>;
   try {

@@ -27,7 +27,8 @@ export function NewBillFlow() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const fileInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const libraryInput = useRef<HTMLInputElement>(null);
 
   async function uploadFile(file: File) {
     setError(null);
@@ -64,26 +65,46 @@ export function NewBillFlow() {
 
   if (stage === "upload") {
     return (
-      <div className="reveal mt-6 space-y-5">
+      <div className="reveal mt-6 space-y-4">
         <p className="text-[var(--color-muted)]">
-          Snap a photo of the receipt. We&apos;ll read the items and you can
-          edit anything we got wrong.
+          Snap or upload a receipt — restaurant, gas, tickets, anything.
+          PDFs from email work too.
         </p>
         <button
           type="button"
-          onClick={() => fileInput.current?.click()}
-          className="tap w-full px-6 py-10 rounded-[var(--radius-lg)] bg-[var(--color-surface)] border-2 border-dashed border-[var(--color-divider)] text-[var(--color-ink)]"
+          onClick={() => cameraInput.current?.click()}
+          className="tap w-full px-6 py-8 rounded-[var(--radius-lg)] bg-[var(--color-surface)] border-2 border-dashed border-[var(--color-divider)] text-[var(--color-ink)]"
         >
-          <div className="font-display text-xl">Tap to take a photo</div>
+          <div className="font-display text-xl">Take a photo</div>
           <div className="text-xs text-[var(--color-muted)] mt-1">
-            or pick from your photo library
+            Use your camera
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => libraryInput.current?.click()}
+          className="tap w-full px-6 py-8 rounded-[var(--radius-lg)] bg-[var(--color-surface)] border-2 border-dashed border-[var(--color-divider)] text-[var(--color-ink)]"
+        >
+          <div className="font-display text-xl">Upload a file</div>
+          <div className="text-xs text-[var(--color-muted)] mt-1">
+            Image or PDF from your library
           </div>
         </button>
         <input
-          ref={fileInput}
+          ref={cameraInput}
           type="file"
           accept="image/*"
           capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) uploadFile(f);
+          }}
+        />
+        <input
+          ref={libraryInput}
+          type="file"
+          accept="image/*,application/pdf"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -173,6 +194,9 @@ export function NewBillFlow() {
       const res = await createBillAction(JSON.stringify(payload));
       if (res?.error) {
         setError(res.error);
+        if (res.redirect) {
+          setTimeout(() => router.push(res.redirect!), 1500);
+        }
         return;
       }
       if (res?.short_id) {
@@ -189,7 +213,7 @@ export function NewBillFlow() {
         onChange={(e) =>
           setDraft((d) => (d ? { ...d, restaurant_name: e.target.value } : d))
         }
-        placeholder="Restaurant name (optional)"
+        placeholder="Where (optional) — e.g. Joe's Pizza, Shell, AMC"
         className="w-full px-4 py-3 rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-divider)] focus:outline-none focus:border-[var(--color-accent)] font-display text-lg"
       />
 

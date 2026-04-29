@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { parseReceipt, ParsedReceiptSchema } from "@/lib/ocr";
+import { parseReceipt, ParsedReceiptSchema, type ReceiptMediaType } from "@/lib/ocr";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
-const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+const ALLOWED = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+]);
+const MAX_BYTES = 12 * 1024 * 1024; // 12 MB
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -24,13 +30,13 @@ export async function POST(req: Request) {
   }
   if (!ALLOWED.has(file.type)) {
     return NextResponse.json(
-      { error: "Use a JPEG, PNG, WebP, or GIF image" },
+      { error: "Use a JPEG, PNG, WebP, GIF, or PDF" },
       { status: 400 }
     );
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { error: "Image too large (max 8 MB)" },
+      { error: "File too large (max 12 MB)" },
       { status: 400 }
     );
   }
@@ -40,8 +46,8 @@ export async function POST(req: Request) {
 
   try {
     const parsed = await parseReceipt({
-      imageBase64: base64,
-      mediaType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+      fileBase64: base64,
+      mediaType: file.type as ReceiptMediaType,
     });
     return NextResponse.json({
       parsed: ParsedReceiptSchema.parse(parsed),
