@@ -533,3 +533,48 @@ MVP is shippable when, on an iPhone:
 5. The page looks good on iPhone 13 Pro and up (375px–430px viewport widths).
 
 That's it. Everything else is iteration.
+
+---
+
+## 18. v2 Enhancements (post-MVP, 2026-04-30)
+
+After the initial launch the following additions and refinements were made. They are now part of the live product on `splity-lyart.vercel.app` and should be considered baseline for any future iteration.
+
+### Receipt capture
+- **Camera + library upload buttons.** The `/new` page exposes two buttons — one with `capture="environment"` for the back camera, and one for the photo library / Files app. Receipts arriving as PDFs from email work via the library button.
+- **PDF support in OCR.** `/api/ocr` accepts both images (`image` content block) and PDFs (`document` content block, `media_type: "application/pdf"`) when calling Claude Haiku 4.5.
+- **Generic copy.** Marketing and onboarding copy was reworded so the app reads as "any receipt" (gas, tickets, groceries) rather than "restaurants only."
+
+### Receipt storage
+- **Private `receipts` Supabase Storage bucket.** Uploads run server-side via the service-role client at `/api/ocr`, keying files as `{user_id}/{uuid}.{ext}`.
+- **Signed-URL endpoint.** `/api/receipt/[shortId]` issues a 10-minute signed URL when given a known share-link slug. Knowledge of the slug is the access gate; no anon Storage policies are required.
+- **Receipt button on `/me` and on the share page.** Payers see a "Receipt" link on each bill card, payees see "View receipt" on the claim page when one exists. Both open in a new tab.
+
+### Claim flow (payee side)
+- **Mode toggle.** A pill switch on the share page lets the payee choose **Pick items** (default) or **Custom amount**.
+- **Per-item percentage picker.** Tapping an item reveals a 100 / 75 / 50 / 25% selector inside the selected card. Default is 100%. The line is computed as `round(price * qty * pct / 100)`, divided evenly with other claimers when the item is shared.
+- **Custom amount mode.** A single dollar input. When used, total bypasses tax/tip proration entirely — the payee's total equals the entered amount. Useful for partial payments ("here's $20 toward gas").
+- **Schema.**
+  - `claims.custom_amount_cents int null`
+  - `claim_items.share_percent int not null default 100 check (share_percent in (25,50,75,100))`
+
+### New-bill flow (payer side)
+- **Per-item name assignment.** Each line on `/new` has an optional "Assign to (e.g. Mary)" field. The assignment surfaces on the share page as "For Mary" so the payee knows the line was already earmarked.
+- **Schema.** `bill_items.assigned_to text null`.
+- **Tax/tip input UX.** `<DollarField>` has `placeholder="0.00"`, `onFocus` selects the existing value, the wrapper is `w-full` and the input is `min-w-0` so the `$` glyph and value always sit inside the rounded box. Fixes a bug where typing `1` against an OCR-prefilled `$1.00` produced `$11.00`.
+- **Explicit "link ready" success stage.** Submitting no longer redirects silently — `NewBillFlow` shows a success card with the share URL plus **Share** (native share sheet when available) and **Copy link** buttons. Secondary links go back to `/me` or to a preview of the share page. The previous flow could appear stuck on "Creating link…" if the post-action navigation stalled.
+
+### Auth
+- **Email magic links via Resend SMTP** as the primary auth method, configured under Supabase → Auth → SMTP Settings. Twilio phone OTP is gated by A2P 10DLC registration and is intentionally deferred.
+- **Auth callback routes by payer existence.** `/auth/callback` and the hash-fragment fallback in `AuthBootstrap.tsx` both look up `payers` by `user_id` after the session is established. Returning users land on `/me`; new users land on `/me/payment-methods?first=1` (the payer-setup / sign-up step). The previous behaviour dropped first-time users on the marketing landing page.
+
+### Schema migration
+All v2 columns ship in a single migration: `supabase/migrations/0003_v2_features.sql`.
+
+```sql
+alter table claims     add column if not exists custom_amount_cents int;
+alter table claim_items add column if not exists share_percent int not null default 100
+  check (share_percent in (25, 50, 75, 100));
+alter table bill_items add column if not exists assigned_to text;
+alter table bills      add column if not exists receipt_path text;
+```

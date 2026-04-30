@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { dollarsToCents, formatCents, centsToDollarString } from "@/lib/money";
@@ -23,12 +24,14 @@ type Draft = {
 
 export function NewBillFlow() {
   const router = useRouter();
-  const [stage, setStage] = useState<"upload" | "loading" | "validate">(
+  const [stage, setStage] = useState<"upload" | "loading" | "validate" | "done">(
     "upload"
   );
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [doneShortId, setDoneShortId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const cameraInput = useRef<HTMLInputElement>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
 
@@ -212,10 +215,107 @@ export function NewBillFlow() {
         return;
       }
       if (res?.short_id) {
-        router.push(`/me?new=${res.short_id}`);
+        setDoneShortId(res.short_id);
+        setStage("done");
         router.refresh();
       }
     });
+  }
+
+  async function copyDoneLink() {
+    if (!doneShortId) return;
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+    const link = `${appUrl}/b/${doneShortId}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.prompt("Copy this link", link);
+    }
+  }
+
+  async function shareDoneLink() {
+    if (!doneShortId) return;
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+    const link = `${appUrl}/b/${doneShortId}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Splity",
+          text: draft?.restaurant_name
+            ? `I paid for ${draft.restaurant_name}. Tap your items:`
+            : "I paid. Tap your items:",
+          url: link,
+        });
+      } catch {
+        /* user cancelled */
+      }
+    } else {
+      copyDoneLink();
+    }
+  }
+
+  if (stage === "done" && doneShortId) {
+    const appUrl =
+      typeof window !== "undefined"
+        ? process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
+        : process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const link = `${appUrl}/b/${doneShortId}`;
+    return (
+      <div className="reveal mt-6 space-y-5">
+        <div>
+          <div className="font-display text-3xl text-[var(--color-ink)]">
+            Your link is ready
+          </div>
+          <p className="text-[var(--color-muted)] mt-1">
+            Share it with anyone who owes you. They tap their items and pay
+            you back — no app, no sign up.
+          </p>
+        </div>
+
+        <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
+          <div className="text-xs text-[var(--color-muted)]">Share link</div>
+          <div className="mt-1 font-mono text-sm break-all text-[var(--color-ink)]">
+            {link}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={shareDoneLink}
+            className="tap flex-1 px-6 py-3.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-medium"
+          >
+            Share
+          </button>
+          <button
+            type="button"
+            onClick={copyDoneLink}
+            className="tap flex-1 px-6 py-3.5 rounded-[var(--radius-pill)] border border-[var(--color-divider)] text-[var(--color-ink)] font-medium"
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Link
+            href="/me"
+            className="tap flex-1 text-center px-4 py-3 rounded-[var(--radius-pill)] text-sm text-[var(--color-muted)] hover:bg-[var(--color-divider)]"
+          >
+            Back to my bills
+          </Link>
+          <Link
+            href={`/b/${doneShortId}`}
+            className="tap flex-1 text-center px-4 py-3 rounded-[var(--radius-pill)] text-sm text-[var(--color-muted)] hover:bg-[var(--color-divider)]"
+          >
+            Preview
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -249,7 +349,9 @@ export function NewBillFlow() {
                 onChange={(e) =>
                   update(idx, { price_cents: dollarsToCents(e.target.value) })
                 }
-                className="w-20 px-2 py-2 bg-transparent text-right focus:outline-none font-mono"
+                onFocus={(e) => e.currentTarget.select()}
+                placeholder="0.00"
+                className="w-20 min-w-0 px-2 py-2 bg-transparent text-right focus:outline-none font-mono"
               />
             </div>
             <div className="flex gap-3 items-center mt-2 text-xs text-[var(--color-muted)]">
@@ -353,15 +455,17 @@ function DollarField({
   onChange: (c: number) => void;
 }) {
   return (
-    <label className="block">
+    <label className="block w-full">
       <span className="text-xs text-[var(--color-muted)]">{label}</span>
-      <div className="mt-1 flex items-center px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-divider)]">
+      <div className="mt-1 flex items-center w-full px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-divider)] focus-within:border-[var(--color-accent)]">
         <span className="text-[var(--color-muted)] font-mono">$</span>
         <input
           inputMode="decimal"
           value={centsToDollarString(cents)}
           onChange={(e) => onChange(dollarsToCents(e.target.value))}
-          className="flex-1 ml-1 bg-transparent text-right focus:outline-none font-mono"
+          onFocus={(e) => e.currentTarget.select()}
+          placeholder="0.00"
+          className="flex-1 min-w-0 ml-1 bg-transparent text-right focus:outline-none font-mono"
         />
       </div>
     </label>

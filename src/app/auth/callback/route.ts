@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   const errorDesc =
     url.searchParams.get("error_description") ?? url.searchParams.get("error");
-  const next = url.searchParams.get("next") ?? "/me";
+  const next = url.searchParams.get("next");
 
   if (errorDesc) {
     return NextResponse.redirect(
@@ -20,11 +20,31 @@ export async function GET(req: Request) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    if (error) {
+      return NextResponse.redirect(
+        new URL(`/auth?error=${encodeURIComponent(error.message)}`, url.origin)
+      );
+    }
+
+    if (next) {
       return NextResponse.redirect(new URL(next, url.origin));
     }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.redirect(new URL("/auth", url.origin));
+    }
+
+    const { data: payer } = await supabase
+      .from("payers")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     return NextResponse.redirect(
-      new URL(`/auth?error=${encodeURIComponent(error.message)}`, url.origin)
+      new URL(payer ? "/me" : "/me/payment-methods?first=1", url.origin)
     );
   }
 
