@@ -7,6 +7,7 @@ import { z } from "zod";
 
 const CreateBillSchema = z.object({
   restaurant_name: z.string().nullable(),
+  receipt_path: z.string().nullable().optional(),
   subtotal_cents: z.number().int().nonnegative(),
   tax_cents: z.number().int().nonnegative(),
   tip_cents: z.number().int().nonnegative(),
@@ -17,6 +18,7 @@ const CreateBillSchema = z.object({
       price_cents: z.number().int().nonnegative(),
       quantity: z.number().int().positive(),
       is_shared: z.boolean(),
+      assigned_to: z.string().nullable().optional(),
     })
   ).min(1),
 });
@@ -61,6 +63,7 @@ export async function createBillAction(payloadJson: string) {
       short_id,
       payer_id: payer.id,
       restaurant_name: parsed.restaurant_name,
+      receipt_path: parsed.receipt_path ?? null,
       subtotal_cents: parsed.subtotal_cents,
       tax_cents: parsed.tax_cents,
       tip_cents: parsed.tip_cents,
@@ -80,6 +83,7 @@ export async function createBillAction(payloadJson: string) {
       price_cents: it.price_cents,
       quantity: it.quantity,
       is_shared: it.is_shared,
+      assigned_to: it.assigned_to ?? null,
       position: idx,
     }))
   );

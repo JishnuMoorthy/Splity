@@ -16,6 +16,7 @@ export function BillCard({
     restaurant_name: string | null;
     total_cents: number;
     created_at: string;
+    has_receipt?: boolean;
   };
   appUrl: string;
 }) {
@@ -92,6 +93,16 @@ export function BillCard({
         >
           {copied ? "Copied!" : "Copy / share link"}
         </button>
+        {bill.has_receipt ? (
+          <a
+            href={`/api/receipt/${bill.short_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="tap px-3 py-2 rounded-[var(--radius-pill)] text-xs text-[var(--color-muted)] hover:bg-[var(--color-divider)]"
+          >
+            Receipt
+          </a>
+        ) : null}
         <button
           type="button"
           onClick={onDelete}

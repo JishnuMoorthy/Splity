@@ -5,19 +5,33 @@ import { calculateClaimerTotal } from "@/lib/money";
 
 export const runtime = "nodejs";
 
-const ClaimSchema = z.object({
-  short_id: z.string().min(3).max(20),
-  claimer_session_id: z.string().min(8).max(128),
-  claimer_name: z.string().min(1).max(60),
-  selections: z
-    .array(
-      z.object({
-        item_id: z.string().uuid(),
-      })
-    )
-    .min(1)
-    .max(200),
-});
+const SharePercent = z.union([
+  z.literal(25),
+  z.literal(50),
+  z.literal(75),
+  z.literal(100),
+]);
+
+const ClaimSchema = z
+  .object({
+    short_id: z.string().min(3).max(20),
+    claimer_session_id: z.string().min(8).max(128),
+    claimer_name: z.string().min(1).max(60),
+    selections: z
+      .array(
+        z.object({
+          item_id: z.string().uuid(),
+          share_percent: SharePercent.default(100),
+        })
+      )
+      .max(200)
+      .default([]),
+    custom_amount_cents: z.number().int().positive().nullable().optional(),
+  })
+  .refine(
+    (v) => (v.custom_amount_cents ?? 0) > 0 || v.selections.length > 0,
+    { message: "Pick at least one item or enter a custom amount" }
+  );
 
 export async function POST(req: Request) {
   let body: unknown;
@@ -33,7 +47,13 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const { short_id, claimer_session_id, claimer_name, selections } = parse.data;
+  const {
+    short_id,
+    claimer_session_id,
+    claimer_name,
+    selections,
+    custom_amount_cents,
+  } = parse.data;
 
   const sb = createServiceClient();
 
@@ -91,7 +111,11 @@ export async function POST(req: Request) {
 
   // Compute this claimer's subtotal + share fractions
   let claimerSubtotal = 0;
-  const claimItemsRows: Array<{ item_id: string; share_fraction: number }> = [];
+  const claimItemsRows: Array<{
+    item_id: string;
+    share_fraction: number;
+    share_percent: number;
+  }> = [];
 
   const seen = new Set<string>();
   for (const sel of selections) {
@@ -100,27 +124,34 @@ export async function POST(req: Request) {
     const item = itemMap.get(sel.item_id);
     if (!item) continue;
 
-    let fraction = 1;
-    let lineCents = item.price_cents * item.quantity;
+    const pct = sel.share_percent / 100;
+    let fraction = pct;
+    let lineCents = Math.round(item.price_cents * item.quantity * pct);
     if (item.is_shared) {
       const others = sharedClaimerCount.get(item.id)?.size ?? 0;
-      const denom = others + 1; // include self
-      fraction = 1 / denom;
-      lineCents = Math.round((item.price_cents * item.quantity) / denom);
+      const denom = others + 1;
+      fraction = pct / denom;
+      lineCents = Math.round((item.price_cents * item.quantity * pct) / denom);
     }
     claimerSubtotal += lineCents;
     claimItemsRows.push({
       item_id: sel.item_id,
       share_fraction: Number(fraction.toFixed(4)),
+      share_percent: sel.share_percent,
     });
   }
 
-  const total = calculateClaimerTotal(
-    claimerSubtotal,
-    billRow.subtotal_cents,
-    billRow.tax_cents,
-    billRow.tip_cents
-  );
+  // custom_amount_cents overrides everything: the claimer pays exactly that.
+  // No tax/tip proration — the user typed the final number they want to pay.
+  const total =
+    custom_amount_cents && custom_amount_cents > 0
+      ? custom_amount_cents
+      : calculateClaimerTotal(
+          claimerSubtotal,
+          billRow.subtotal_cents,
+          billRow.tax_cents,
+          billRow.tip_cents
+        );
 
   // Upsert the claim (one per session per bill)
   const existingSelf = existing.find(
@@ -131,7 +162,11 @@ export async function POST(req: Request) {
     claimId = existingSelf.id;
     const { error: updErr } = await sb
       .from("claims")
-      .update({ claimer_name, total_cents: total })
+      .update({
+        claimer_name,
+        total_cents: total,
+        custom_amount_cents: custom_amount_cents ?? null,
+      })
       .eq("id", claimId);
     if (updErr)
       return NextResponse.json({ error: updErr.message }, { status: 500 });
@@ -144,6 +179,7 @@ export async function POST(req: Request) {
         claimer_session_id,
         claimer_name,
         total_cents: total,
+        custom_amount_cents: custom_amount_cents ?? null,
       })
       .select("id")
       .single();
@@ -162,6 +198,7 @@ export async function POST(req: Request) {
         claim_id: claimId,
         item_id: r.item_id,
         share_fraction: r.share_fraction,
+        share_percent: r.share_percent,
       }))
     );
     if (ciErr)

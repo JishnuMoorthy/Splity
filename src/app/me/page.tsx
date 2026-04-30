@@ -24,7 +24,7 @@ export default async function MePage() {
 
   const { data: bills } = await supabase
     .from("bills")
-    .select("id, short_id, restaurant_name, total_cents, created_at, status")
+    .select("id, short_id, restaurant_name, total_cents, created_at, status, receipt_path")
     .eq("payer_id", payer.id)
     .order("created_at", { ascending: false });
 
@@ -66,7 +66,13 @@ export default async function MePage() {
             No bills yet. Upload a receipt to get started.
           </p>
         ) : (
-          bills.map((b) => <BillCard key={b.id} bill={b} appUrl={appUrl} />)
+          bills.map((b) => (
+            <BillCard
+              key={b.id}
+              bill={{ ...b, has_receipt: !!b.receipt_path }}
+              appUrl={appUrl}
+            />
+          ))
         )}
       </div>
     </AppShell>

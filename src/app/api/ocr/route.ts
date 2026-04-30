@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { randomUUID } from "node:crypto";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { parseReceipt, ParsedReceiptSchema, type ReceiptMediaType } from "@/lib/ocr";
 
 export const runtime = "nodejs";
@@ -44,13 +45,34 @@ export async function POST(req: Request) {
   const buf = Buffer.from(await file.arrayBuffer());
   const base64 = buf.toString("base64");
 
+  // Upload to Storage in parallel with OCR; both can succeed/fail independently.
+  const ext =
+    file.type === "application/pdf"
+      ? "pdf"
+      : file.type === "image/png"
+        ? "png"
+        : file.type === "image/webp"
+          ? "webp"
+          : file.type === "image/gif"
+            ? "gif"
+            : "jpg";
+  const path = `${user.id}/${randomUUID()}.${ext}`;
+  const svc = createServiceClient();
+  const upload = svc.storage
+    .from("receipts")
+    .upload(path, buf, { contentType: file.type, upsert: false });
+
   try {
-    const parsed = await parseReceipt({
-      fileBase64: base64,
-      mediaType: file.type as ReceiptMediaType,
-    });
+    const [parsed, uploadRes] = await Promise.all([
+      parseReceipt({
+        fileBase64: base64,
+        mediaType: file.type as ReceiptMediaType,
+      }),
+      upload,
+    ]);
     return NextResponse.json({
       parsed: ParsedReceiptSchema.parse(parsed),
+      receipt_path: uploadRes.error ? null : path,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "OCR failed";

@@ -10,6 +10,7 @@ type DraftItem = {
   price_cents: number;
   quantity: number;
   is_shared: boolean;
+  assigned_name: string;
 };
 
 type Draft = {
@@ -17,6 +18,7 @@ type Draft = {
   items: DraftItem[];
   tax_cents: number;
   tip_cents: number;
+  receipt_path: string | null;
 };
 
 export function NewBillFlow() {
@@ -42,13 +44,14 @@ export function NewBillFlow() {
       setStage("validate");
       setDraft({
         restaurant_name: "",
-        items: [{ name: "", price_cents: 0, quantity: 1, is_shared: false }],
+        items: [{ name: "", price_cents: 0, quantity: 1, is_shared: false, assigned_name: "" }],
         tax_cents: 0,
         tip_cents: 0,
+        receipt_path: null,
       });
       return;
     }
-    const { parsed } = await res.json();
+    const { parsed, receipt_path } = await res.json();
     setDraft({
       restaurant_name: parsed.restaurant_name ?? "",
       items: parsed.items.map((it: DraftItem) => ({
@@ -56,9 +59,11 @@ export function NewBillFlow() {
         price_cents: it.price_cents,
         quantity: it.quantity,
         is_shared: false,
+        assigned_name: "",
       })),
       tax_cents: parsed.tax_cents,
       tip_cents: parsed.tip_cents,
+      receipt_path: receipt_path ?? null,
     });
     setStage("validate");
   }
@@ -150,7 +155,7 @@ export function NewBillFlow() {
             ...d,
             items: [
               ...d.items,
-              { name: "", price_cents: 0, quantity: 1, is_shared: false },
+              { name: "", price_cents: 0, quantity: 1, is_shared: false, assigned_name: "" },
             ],
           }
         : d
@@ -178,7 +183,14 @@ export function NewBillFlow() {
     }
     const payload = {
       restaurant_name: draft.restaurant_name.trim() || null,
-      items: cleaned,
+      receipt_path: draft.receipt_path,
+      items: cleaned.map((it) => ({
+        name: it.name,
+        price_cents: it.price_cents,
+        quantity: it.quantity,
+        is_shared: it.is_shared,
+        assigned_to: it.assigned_name.trim() || null,
+      })),
       subtotal_cents: cleaned.reduce(
         (s, it) => s + it.price_cents * it.quantity,
         0
@@ -273,6 +285,12 @@ export function NewBillFlow() {
                 Remove
               </button>
             </div>
+            <input
+              value={it.assigned_name}
+              onChange={(e) => update(idx, { assigned_name: e.target.value })}
+              placeholder="Assign to (optional) — e.g. Mary"
+              className="mt-2 w-full px-2 py-1.5 text-xs bg-transparent border-b border-[var(--color-divider)] focus:outline-none focus:border-[var(--color-accent)]"
+            />
           </div>
         ))}
         <button

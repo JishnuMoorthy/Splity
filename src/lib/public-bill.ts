@@ -11,9 +11,9 @@ export async function getPublicBill(
     .from("bills")
     .select(
       `
-      id, short_id, restaurant_name, subtotal_cents, tax_cents, tip_cents, total_cents,
+      id, short_id, restaurant_name, subtotal_cents, tax_cents, tip_cents, total_cents, receipt_path,
       payer:payers (display_name, venmo_handle, zelle_contact, cashapp_handle),
-      items:bill_items (id, name, price_cents, quantity, is_shared, position)
+      items:bill_items (id, name, price_cents, quantity, is_shared, position, assigned_to)
       `
     )
     .eq("short_id", shortId)
@@ -30,6 +30,7 @@ export async function getPublicBill(
     tax_cents: number;
     tip_cents: number;
     total_cents: number;
+    receipt_path: string | null;
     payer: {
       display_name: string;
       venmo_handle: string | null;
@@ -43,6 +44,7 @@ export async function getPublicBill(
       quantity: number;
       is_shared: boolean;
       position: number;
+      assigned_to: string | null;
     }>;
   };
 
@@ -79,6 +81,7 @@ export async function getPublicBill(
     tax_cents: billRow.tax_cents,
     tip_cents: billRow.tip_cents,
     total_cents: billRow.total_cents,
+    has_receipt: !!billRow.receipt_path,
     payer: billRow.payer,
     items: [...billRow.items]
       .sort((a, b) => a.position - b.position)

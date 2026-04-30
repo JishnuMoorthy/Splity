@@ -57,6 +57,7 @@ export type PublicBill = {
   tax_cents: number;
   tip_cents: number;
   total_cents: number;
+  has_receipt: boolean;
   payer: {
     display_name: string;
     venmo_handle: string | null;
@@ -70,6 +71,7 @@ export type PublicBill = {
     quantity: number;
     is_shared: boolean;
     position: number;
+    assigned_to: string | null;
     claimed_by: Array<{ name: string | null; share_fraction: number }>;
   }>;
 };
