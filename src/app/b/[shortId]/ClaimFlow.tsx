@@ -39,7 +39,18 @@ function unitsClaimedByOthers(
     .reduce((s, c) => s + c.units, 0);
 }
 
-export function ClaimFlow({ bill }: { bill: PublicBill }) {
+export function ClaimFlow({
+  bill,
+  isPayer = false,
+}: {
+  bill: PublicBill;
+  isPayer?: boolean;
+}) {
+  if (isPayer) return <PayerSelfCoverFlow bill={bill} />;
+  return <PayeeClaimFlow bill={bill} />;
+}
+
+function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
   const router = useRouter();
   const [sessionId, setSessionId] = useState("");
   const [name, setName] = useState("");
@@ -230,12 +241,34 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
               const units = picked.get(it.id);
               const isPicked = units !== undefined && units > 0;
               const otherClaimers = it.claimed_by.filter(
-                (c) => c.name !== name
+                (c) => c.name !== name && !c.is_payer_self
               );
               const othersUnits = unitsClaimedByOthers(it, name);
               const remainingForMe = Math.max(0, it.quantity - othersUnits);
               const isMulti = it.quantity > 1;
               const fullyCovered = it.claimed_units >= it.quantity;
+              if (it.covered_by_payer) {
+                return (
+                  <li key={it.id}>
+                    <div className="rounded-[var(--radius-md)] border bg-[var(--color-surface)] border-[var(--color-divider)] text-[var(--color-muted)] opacity-70 p-3">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate line-through">
+                            {it.name}
+                            {it.quantity > 1 ? ` ×${it.quantity}` : ""}
+                          </div>
+                          <div className="text-xs mt-0.5">
+                            {bill.payer.display_name} is covering this
+                          </div>
+                        </div>
+                        <span className="font-mono">
+                          {formatCents(it.price_cents * it.quantity)}
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                );
+              }
               return (
                 <li key={it.id}>
                   <div
@@ -425,6 +458,154 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
             className="tap w-full mt-3 px-6 py-3.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-medium disabled:opacity-60"
           >
             {submitting ? "Saving…" : `Done — pay ${bill.payer.display_name}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Payer view: the bill creator marks items they're personally covering.
+// Toggling commits a single is_payer_self claim row server-side.
+function PayerSelfCoverFlow({ bill }: { bill: PublicBill }) {
+  const router = useRouter();
+  const [covered, setCovered] = useState<Set<string>>(
+    () => new Set(bill.items.filter((i) => i.covered_by_payer).map((i) => i.id))
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggle(id: string) {
+    setCovered((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  const coveredCents = useMemo(() => {
+    let s = 0;
+    for (const it of bill.items) {
+      if (covered.has(it.id)) s += it.price_cents * it.quantity;
+    }
+    return s;
+  }, [covered, bill.items]);
+
+  async function save() {
+    setError(null);
+    setSubmitting(true);
+    const res = await fetch("/api/claims/payer-self", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        short_id: bill.short_id,
+        item_ids: [...covered],
+      }),
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "Something went wrong.");
+      return;
+    }
+    router.refresh();
+  }
+
+  return (
+    <div className="reveal pb-32">
+      <div className="mt-2">
+        <div className="font-display text-2xl text-[var(--color-ink)]">
+          Your bill —{" "}
+          <span className="font-mono">{formatCents(bill.total_cents)}</span>
+        </div>
+        {bill.restaurant_name ? (
+          <div className="text-[var(--color-muted)] mt-0.5">
+            at {bill.restaurant_name}
+          </div>
+        ) : null}
+        <p className="text-sm text-[var(--color-muted)] mt-3">
+          Tap items you&apos;re covering yourself. They&apos;ll count toward
+          coverage and won&apos;t be billed to anyone.
+        </p>
+      </div>
+
+      {bill.claimed_total_cents > 0 ? (
+        <CoverageBanner
+          claimed={bill.claimed_total_cents}
+          total={bill.total_cents}
+        />
+      ) : null}
+
+      <ul className="mt-4 space-y-2">
+        {bill.items.map((it) => {
+          const isCovered = covered.has(it.id);
+          const otherClaimers = it.claimed_by.filter((c) => !c.is_payer_self);
+          return (
+            <li key={it.id}>
+              <button
+                type="button"
+                onClick={() => toggle(it.id)}
+                className={`tap w-full text-left rounded-[var(--radius-md)] border transition-colors p-3 ${
+                  isCovered
+                    ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
+                    : "bg-[var(--color-surface)] border-[var(--color-divider)] text-[var(--color-ink)]"
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">
+                      {it.name}
+                      {it.quantity > 1 ? ` ×${it.quantity}` : ""}
+                    </div>
+                    <div
+                      className={`text-xs mt-0.5 ${
+                        isCovered
+                          ? "text-white/80"
+                          : "text-[var(--color-muted)]"
+                      }`}
+                    >
+                      {isCovered
+                        ? "You're covering this"
+                        : otherClaimers.length === 0
+                          ? "Nobody's picked yet"
+                          : `Claimed by ${otherClaimers
+                              .map((c) => c.name ?? "someone")
+                              .slice(0, 3)
+                              .join(", ")}`}
+                    </div>
+                  </div>
+                  <span className="font-mono">
+                    {formatCents(it.price_cents * it.quantity)}
+                  </span>
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {error ? (
+        <p className="mt-4 text-sm text-[var(--color-error)]">{error}</p>
+      ) : null}
+
+      <div className="fixed bottom-0 inset-x-0 px-6 pt-3 pb-6 bg-[var(--color-bg)] border-t border-[var(--color-divider)]">
+        <div className="max-w-xl mx-auto">
+          <div className="flex justify-between items-baseline">
+            <span className="text-sm text-[var(--color-muted)]">
+              Covering yourself
+            </span>
+            <span className="font-mono font-display text-2xl text-[var(--color-ink)]">
+              {formatCents(coveredCents)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={save}
+            disabled={submitting}
+            className="tap w-full mt-3 px-6 py-3.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-medium disabled:opacity-60"
+          >
+            {submitting ? "Saving…" : "Save coverage"}
           </button>
         </div>
       </div>

@@ -12,7 +12,7 @@ export async function getPublicBill(
     .select(
       `
       id, short_id, restaurant_name, subtotal_cents, tax_cents, tip_cents, total_cents, receipt_path,
-      payer:payers (display_name, venmo_handle, zelle_contact, cashapp_handle),
+      payer:payers (user_id, display_name, venmo_handle, zelle_contact, cashapp_handle),
       items:bill_items (id, name, price_cents, quantity, is_shared, position, assigned_to)
       `
     )
@@ -32,6 +32,7 @@ export async function getPublicBill(
     total_cents: number;
     receipt_path: string | null;
     payer: {
+      user_id: string;
       display_name: string;
       venmo_handle: string | null;
       zelle_contact: string | null;
@@ -52,17 +53,23 @@ export async function getPublicBill(
   const { data: claims } = await sb
     .from("claims")
     .select(
-      "id, claimer_name, total_cents, claim_items(item_id, share_fraction, units)"
+      "id, claimer_name, total_cents, is_payer_self, claim_items(item_id, share_fraction, units)"
     )
     .eq("bill_id", billRow.id);
 
-  type Claimer = { name: string | null; share_fraction: number; units: number };
+  type Claimer = {
+    name: string | null;
+    share_fraction: number;
+    units: number;
+    is_payer_self: boolean;
+  };
   const byItem = new Map<string, Array<Claimer>>();
   let claimedTotal = 0;
   for (const c of claims ?? []) {
     type CRow = {
       claimer_name: string | null;
       total_cents: number;
+      is_payer_self: boolean;
       claim_items: Array<{
         item_id: string;
         share_fraction: number;
@@ -77,6 +84,7 @@ export async function getPublicBill(
         name: cr.claimer_name,
         share_fraction: Number(ci.share_fraction),
         units: Number(ci.units),
+        is_payer_self: !!cr.is_payer_self,
       });
       byItem.set(ci.item_id, list);
     }
@@ -91,13 +99,20 @@ export async function getPublicBill(
     total_cents: billRow.total_cents,
     has_receipt: !!billRow.receipt_path,
     claimed_total_cents: claimedTotal,
-    payer: billRow.payer,
+    payer_user_id: billRow.payer.user_id,
+    payer: {
+      display_name: billRow.payer.display_name,
+      venmo_handle: billRow.payer.venmo_handle,
+      zelle_contact: billRow.payer.zelle_contact,
+      cashapp_handle: billRow.payer.cashapp_handle,
+    },
     items: [...billRow.items]
       .sort((a, b) => a.position - b.position)
       .map((it) => {
         const claimers = byItem.get(it.id) ?? [];
         const claimed_units = claimers.reduce((s, c) => s + c.units, 0);
-        return { ...it, claimed_units, claimed_by: claimers };
+        const covered_by_payer = claimers.some((c) => c.is_payer_self);
+        return { ...it, claimed_units, covered_by_payer, claimed_by: claimers };
       }),
   };
 }

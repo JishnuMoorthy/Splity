@@ -62,6 +62,9 @@ export type PublicBill = {
   // Sum of claims.total_cents on this bill — what payees have committed to.
   // Note: counts both unpaid and paid claims (status is tracked separately).
   claimed_total_cents: number;
+  // Auth user_id of the payer; used by the share page to detect "is this me?"
+  // and gate the self-claim affordance.
+  payer_user_id: string;
   payer: {
     display_name: string;
     venmo_handle: string | null;
@@ -77,10 +80,12 @@ export type PublicBill = {
     position: number;
     assigned_to: string | null;
     claimed_units: number;
+    covered_by_payer: boolean;
     claimed_by: Array<{
       name: string | null;
       share_fraction: number;
       units: number;
+      is_payer_self: boolean;
     }>;
   }>;
 };
