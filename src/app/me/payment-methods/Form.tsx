@@ -37,28 +37,28 @@ export function PaymentMethodsForm({ initial }: { initial: Initial }) {
       <Field
         label="Your name"
         name="display_name"
-        placeholder="Jishnu"
+        placeholder="Your name"
         defaultValue={initial?.display_name ?? ""}
         required
       />
       <Field
         label="Venmo handle"
         name="venmo_handle"
-        placeholder="Jishnu-Moorthy"
+        placeholder="your-venmo-handle"
         defaultValue={initial?.venmo_handle ?? ""}
         prefix="@"
       />
       <Field
         label="Cash App $cashtag"
         name="cashapp_handle"
-        placeholder="jishnu"
+        placeholder="yourcashtag"
         defaultValue={initial?.cashapp_handle ?? ""}
         prefix="$"
       />
       <Field
         label="Zelle (phone or email)"
         name="zelle_contact"
-        placeholder="you@example.com"
+        placeholder="phone or email"
         defaultValue={initial?.zelle_contact ?? ""}
       />
 
