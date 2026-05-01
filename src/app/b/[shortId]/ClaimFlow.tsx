@@ -178,6 +178,13 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
         ) : null}
       </div>
 
+      {bill.claimed_total_cents > 0 ? (
+        <CoverageBanner
+          claimed={bill.claimed_total_cents}
+          total={bill.total_cents}
+        />
+      ) : null}
+
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -228,20 +235,23 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
               const othersUnits = unitsClaimedByOthers(it, name);
               const remainingForMe = Math.max(0, it.quantity - othersUnits);
               const isMulti = it.quantity > 1;
+              const fullyCovered = it.claimed_units >= it.quantity;
               return (
                 <li key={it.id}>
                   <div
                     className={`rounded-[var(--radius-md)] border transition-colors ${
                       isPicked
                         ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
-                        : "bg-[var(--color-surface)] border-[var(--color-divider)] text-[var(--color-ink)]"
+                        : fullyCovered
+                          ? "bg-[var(--color-surface)] border-[var(--color-divider)] text-[var(--color-muted)] opacity-60"
+                          : "bg-[var(--color-surface)] border-[var(--color-divider)] text-[var(--color-ink)]"
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => togglePick(it)}
                       disabled={!isPicked && remainingForMe <= 0}
-                      className="tap w-full text-left p-3 disabled:opacity-50"
+                      className="tap w-full text-left p-3 disabled:cursor-not-allowed"
                     >
                       <div className="flex items-baseline justify-between gap-3">
                         <div className="min-w-0">
@@ -258,21 +268,24 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
                           >
                             {it.assigned_to ? `For ${it.assigned_to} · ` : ""}
                             {it.is_shared ? "Shared · " : ""}
-                            {isMulti && othersUnits > 0
-                              ? `${othersUnits}/${it.quantity} taken · `
-                              : ""}
-                            {otherClaimers.length === 0
-                              ? isMulti && othersUnits === 0
-                                ? "Nobody's picked yet"
-                                : "No one else yet"
-                              : `Also claimed by ${otherClaimers
-                                  .map((c) => c.name ?? "someone")
-                                  .slice(0, 3)
-                                  .join(", ")}${
-                                  otherClaimers.length > 3
-                                    ? ` +${otherClaimers.length - 3}`
-                                    : ""
-                                }`}
+                            {fullyCovered
+                              ? "Fully claimed"
+                              : isMulti && othersUnits > 0
+                                ? `${othersUnits}/${it.quantity} taken · `
+                                : ""}
+                            {!fullyCovered &&
+                              (otherClaimers.length === 0
+                                ? isMulti && othersUnits === 0
+                                  ? "Nobody's picked yet"
+                                  : "No one else yet"
+                                : `Also claimed by ${otherClaimers
+                                    .map((c) => c.name ?? "someone")
+                                    .slice(0, 3)
+                                    .join(", ")}${
+                                    otherClaimers.length > 3
+                                      ? ` +${otherClaimers.length - 3}`
+                                      : ""
+                                  }`)}
                           </div>
                         </div>
                         <span className="font-mono">
@@ -414,6 +427,36 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
             {submitting ? "Saving…" : `Done — pay ${bill.payer.display_name}`}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CoverageBanner({
+  claimed,
+  total,
+}: {
+  claimed: number;
+  total: number;
+}) {
+  if (total <= 0) return null;
+  const pct = Math.min(100, Math.round((claimed / total) * 100));
+  const fullyCovered = claimed >= total;
+  return (
+    <div className="mt-4 p-3 rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
+      <div className="flex justify-between items-baseline text-xs text-[var(--color-muted)]">
+        <span>
+          {fullyCovered
+            ? "Fully covered — thanks!"
+            : `${formatCents(claimed)} of ${formatCents(total)} covered`}
+        </span>
+        <span className="font-mono">{pct}%</span>
+      </div>
+      <div className="mt-2 h-1.5 rounded-[var(--radius-pill)] bg-[var(--color-divider)] overflow-hidden">
+        <div
+          className="h-full rounded-[var(--radius-pill)] bg-[var(--color-accent)] transition-all"
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );

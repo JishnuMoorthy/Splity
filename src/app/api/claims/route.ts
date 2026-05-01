@@ -213,8 +213,20 @@ export async function POST(req: Request) {
         share_percent: r.share_percent,
       }))
     );
-    if (ciErr)
-      return NextResponse.json({ error: ciErr.message }, { status: 500 });
+    if (ciErr) {
+      // The check_units_not_oversold trigger fires when two payees race for
+      // the last units on a multi-quantity line. Surface a friendly retry
+      // message instead of the raw "oversold" exception text.
+      const oversold = /oversold/i.test(ciErr.message);
+      return NextResponse.json(
+        {
+          error: oversold
+            ? "Someone else just claimed those units. Refresh and pick again."
+            : ciErr.message,
+        },
+        { status: oversold ? 409 : 500 }
+      );
+    }
   }
 
   return NextResponse.json({ ok: true, claim_id: claimId, total_cents: total });

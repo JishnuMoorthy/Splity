@@ -59,6 +59,9 @@ export type PublicBill = {
   tip_cents: number;
   total_cents: number;
   has_receipt: boolean;
+  // Sum of claims.total_cents on this bill — what payees have committed to.
+  // Note: counts both unpaid and paid claims (status is tracked separately).
+  claimed_total_cents: number;
   payer: {
     display_name: string;
     venmo_handle: string | null;

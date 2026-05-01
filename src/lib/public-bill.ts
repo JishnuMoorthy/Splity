@@ -51,14 +51,18 @@ export async function getPublicBill(
   // Pull all claims with their item junctions (for "claimed by" display)
   const { data: claims } = await sb
     .from("claims")
-    .select("id, claimer_name, claim_items(item_id, share_fraction, units)")
+    .select(
+      "id, claimer_name, total_cents, claim_items(item_id, share_fraction, units)"
+    )
     .eq("bill_id", billRow.id);
 
   type Claimer = { name: string | null; share_fraction: number; units: number };
   const byItem = new Map<string, Array<Claimer>>();
+  let claimedTotal = 0;
   for (const c of claims ?? []) {
     type CRow = {
       claimer_name: string | null;
+      total_cents: number;
       claim_items: Array<{
         item_id: string;
         share_fraction: number;
@@ -66,6 +70,7 @@ export async function getPublicBill(
       }>;
     };
     const cr = c as unknown as CRow;
+    claimedTotal += cr.total_cents ?? 0;
     for (const ci of cr.claim_items ?? []) {
       const list = byItem.get(ci.item_id) ?? [];
       list.push({
@@ -85,6 +90,7 @@ export async function getPublicBill(
     tip_cents: billRow.tip_cents,
     total_cents: billRow.total_cents,
     has_receipt: !!billRow.receipt_path,
+    claimed_total_cents: claimedTotal,
     payer: billRow.payer,
     items: [...billRow.items]
       .sort((a, b) => a.position - b.position)
