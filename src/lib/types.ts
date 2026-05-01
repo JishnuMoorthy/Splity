@@ -48,6 +48,7 @@ export type ClaimItem = {
   claim_id: string;
   item_id: string;
   share_fraction: number;
+  units: number;
 };
 
 export type PublicBill = {
@@ -72,6 +73,11 @@ export type PublicBill = {
     is_shared: boolean;
     position: number;
     assigned_to: string | null;
-    claimed_by: Array<{ name: string | null; share_fraction: number }>;
+    claimed_units: number;
+    claimed_by: Array<{
+      name: string | null;
+      share_fraction: number;
+      units: number;
+    }>;
   }>;
 };

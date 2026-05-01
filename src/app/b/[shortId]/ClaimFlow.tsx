@@ -26,12 +26,27 @@ function getOrCreateSessionId(): string {
   return id;
 }
 
+// How many units of this item are already claimed by *other* sessions.
+// We can't tell sessions apart from the public bill (we only have names), so
+// fall back to name match — when ambiguous, default to "all other claims
+// count as other people's" so the stepper bounds are conservative.
+function unitsClaimedByOthers(
+  item: PublicBill["items"][number],
+  myName: string
+): number {
+  return item.claimed_by
+    .filter((c) => !myName || c.name !== myName)
+    .reduce((s, c) => s + c.units, 0);
+}
+
 export function ClaimFlow({ bill }: { bill: PublicBill }) {
   const router = useRouter();
   const [sessionId, setSessionId] = useState("");
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("items");
-  const [picked, setPicked] = useState<Map<string, SharePercent>>(new Map());
+  // Map of item_id → units claimed by this user (numeric). For qty=1 items,
+  // values are in {0.25, 0.5, 0.75, 1.0}; for qty>1, values are integers.
+  const [picked, setPicked] = useState<Map<string, number>>(new Map());
   const [customCents, setCustomCents] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,15 +60,14 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
   const subtotal = useMemo(() => {
     let s = 0;
     for (const it of bill.items) {
-      const pct = picked.get(it.id);
-      if (!pct) continue;
-      const lineCents = Math.round(it.price_cents * it.quantity * (pct / 100));
+      const units = picked.get(it.id);
+      if (!units) continue;
+      let lineCents = Math.round(it.price_cents * units);
       if (it.is_shared) {
         const others = it.claimed_by.filter((c) => c.name !== name).length;
-        s += Math.round(lineCents / (others + 1));
-      } else {
-        s += lineCents;
+        lineCents = Math.round(lineCents / (others + 1));
       }
+      s += lineCents;
     }
     return s;
   }, [picked, bill, name]);
@@ -67,11 +81,15 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
 
   const total = mode === "custom" ? customCents : itemsTotal;
 
-  function togglePick(id: string) {
+  function togglePick(item: PublicBill["items"][number]) {
     setPicked((p) => {
       const n = new Map(p);
-      if (n.has(id)) n.delete(id);
-      else n.set(id, 100);
+      if (n.has(item.id)) {
+        n.delete(item.id);
+      } else {
+        // Default selection: 1 unit for qty>1, full line (1.0) for qty=1.
+        n.set(item.id, 1);
+      }
       return n;
     });
   }
@@ -79,7 +97,16 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
   function setPercent(id: string, pct: SharePercent) {
     setPicked((p) => {
       const n = new Map(p);
-      n.set(id, pct);
+      n.set(id, pct / 100);
+      return n;
+    });
+  }
+
+  function setUnits(id: string, units: number) {
+    setPicked((p) => {
+      const n = new Map(p);
+      if (units <= 0) n.delete(id);
+      else n.set(id, units);
       return n;
     });
   }
@@ -109,9 +136,9 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
         claimer_name: name.trim(),
         selections:
           mode === "items"
-            ? [...picked.entries()].map(([item_id, share_percent]) => ({
+            ? [...picked.entries()].map(([item_id, units]) => ({
                 item_id,
-                share_percent,
+                units,
               }))
             : [],
         custom_amount_cents: mode === "custom" ? customCents : null,
@@ -193,11 +220,14 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
 
           <ul className="mt-3 space-y-2">
             {bill.items.map((it) => {
-              const pct = picked.get(it.id);
-              const isPicked = !!pct;
+              const units = picked.get(it.id);
+              const isPicked = units !== undefined && units > 0;
               const otherClaimers = it.claimed_by.filter(
                 (c) => c.name !== name
               );
+              const othersUnits = unitsClaimedByOthers(it, name);
+              const remainingForMe = Math.max(0, it.quantity - othersUnits);
+              const isMulti = it.quantity > 1;
               return (
                 <li key={it.id}>
                   <div
@@ -209,8 +239,9 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
                   >
                     <button
                       type="button"
-                      onClick={() => togglePick(it.id)}
-                      className="tap w-full text-left p-3"
+                      onClick={() => togglePick(it)}
+                      disabled={!isPicked && remainingForMe <= 0}
+                      className="tap w-full text-left p-3 disabled:opacity-50"
                     >
                       <div className="flex items-baseline justify-between gap-3">
                         <div className="min-w-0">
@@ -227,8 +258,13 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
                           >
                             {it.assigned_to ? `For ${it.assigned_to} · ` : ""}
                             {it.is_shared ? "Shared · " : ""}
+                            {isMulti && othersUnits > 0
+                              ? `${othersUnits}/${it.quantity} taken · `
+                              : ""}
                             {otherClaimers.length === 0
-                              ? "No one else yet"
+                              ? isMulti && othersUnits === 0
+                                ? "Nobody's picked yet"
+                                : "No one else yet"
                               : `Also claimed by ${otherClaimers
                                   .map((c) => c.name ?? "someone")
                                   .slice(0, 3)
@@ -246,26 +282,77 @@ export function ClaimFlow({ bill }: { bill: PublicBill }) {
                     </button>
                     {isPicked ? (
                       <div className="px-3 pb-3 -mt-1">
-                        <div
-                          className="flex gap-1 p-1 rounded-[var(--radius-pill)] bg-white/15 text-xs"
-                          role="radiogroup"
-                          aria-label="Your share"
-                        >
-                          {([100, 75, 50, 25] as SharePercent[]).map((p) => (
+                        {isMulti ? (
+                          <div
+                            className="flex items-center gap-2 p-1 rounded-[var(--radius-pill)] bg-white/15 text-xs"
+                            aria-label="How many you had"
+                          >
                             <button
-                              key={p}
                               type="button"
-                              onClick={() => setPercent(it.id, p)}
-                              className={`flex-1 px-2 py-1.5 rounded-[var(--radius-pill)] transition-colors ${
-                                pct === p
-                                  ? "bg-white text-[var(--color-accent)]"
-                                  : "text-white"
-                              }`}
+                              onClick={() =>
+                                setUnits(it.id, Math.max(0, (units ?? 1) - 1))
+                              }
+                              className="tap w-9 h-7 rounded-[var(--radius-pill)] bg-white/15 text-white text-base leading-none"
+                              aria-label="Decrease"
                             >
-                              {p}%
+                              −
                             </button>
-                          ))}
-                        </div>
+                            <div className="flex-1 text-center text-white">
+                              <span className="font-mono text-sm">
+                                {units} of {it.quantity}
+                              </span>
+                              <span className="text-white/70 ml-2 font-mono">
+                                {formatCents(
+                                  Math.round(it.price_cents * (units ?? 0))
+                                )}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cap = Math.min(
+                                  it.quantity,
+                                  it.quantity - othersUnits
+                                );
+                                setUnits(
+                                  it.id,
+                                  Math.min(cap, (units ?? 1) + 1)
+                                );
+                              }}
+                              disabled={(units ?? 0) >= remainingForMe}
+                              className="tap w-9 h-7 rounded-[var(--radius-pill)] bg-white/15 text-white text-base leading-none disabled:opacity-40"
+                              aria-label="Increase"
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            className="flex gap-1 p-1 rounded-[var(--radius-pill)] bg-white/15 text-xs"
+                            role="radiogroup"
+                            aria-label="Your share"
+                          >
+                            {([100, 75, 50, 25] as SharePercent[]).map((p) => {
+                              const selected =
+                                units !== undefined &&
+                                Math.round(units * 100) === p;
+                              return (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => setPercent(it.id, p)}
+                                  className={`flex-1 px-2 py-1.5 rounded-[var(--radius-pill)] transition-colors ${
+                                    selected
+                                      ? "bg-white text-[var(--color-accent)]"
+                                      : "text-white"
+                                  }`}
+                                >
+                                  {p}%
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>

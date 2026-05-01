@@ -5,13 +5,9 @@ import { calculateClaimerTotal } from "@/lib/money";
 
 export const runtime = "nodejs";
 
-const SharePercent = z.union([
-  z.literal(25),
-  z.literal(50),
-  z.literal(75),
-  z.literal(100),
-]);
-
+// `units` is how many units of bill_items.quantity the claimer is taking.
+// For qty=1 items, units in {0.25, 0.5, 0.75, 1.0} maps to the % picker.
+// For qty>1 items, units is the integer count the claimer says they had.
 const ClaimSchema = z
   .object({
     short_id: z.string().min(3).max(20),
@@ -21,7 +17,7 @@ const ClaimSchema = z
       .array(
         z.object({
           item_id: z.string().uuid(),
-          share_percent: SharePercent.default(100),
+          units: z.number().positive().max(10000),
         })
       )
       .max(200)
@@ -113,6 +109,7 @@ export async function POST(req: Request) {
   let claimerSubtotal = 0;
   const claimItemsRows: Array<{
     item_id: string;
+    units: number;
     share_fraction: number;
     share_percent: number;
   }> = [];
@@ -124,20 +121,34 @@ export async function POST(req: Request) {
     const item = itemMap.get(sel.item_id);
     if (!item) continue;
 
-    const pct = sel.share_percent / 100;
-    let fraction = pct;
-    let lineCents = Math.round(item.price_cents * item.quantity * pct);
+    // Clamp: never claim more units than the line has.
+    const units = Math.min(sel.units, item.quantity);
+    if (units <= 0) continue;
+
+    // line_cents = unit_price * units; if shared, divide by claimer count.
+    let lineCents = Math.round(item.price_cents * units);
+    let fraction = (units / item.quantity);
     if (item.is_shared) {
       const others = sharedClaimerCount.get(item.id)?.size ?? 0;
       const denom = others + 1;
-      fraction = pct / denom;
-      lineCents = Math.round((item.price_cents * item.quantity * pct) / denom);
+      lineCents = Math.round(lineCents / denom);
+      fraction = fraction / denom;
     }
     claimerSubtotal += lineCents;
+
+    // share_percent kept for backwards compat with anything still reading it.
+    // Clamp to one of {25,50,75,100} for qty=1, else 100.
+    const sharePctRaw =
+      item.quantity === 1 ? Math.round(units * 100) : 100;
+    const sharePct = ([25, 50, 75, 100] as const).reduce((closest, p) =>
+      Math.abs(p - sharePctRaw) < Math.abs(closest - sharePctRaw) ? p : closest
+    , 100 as 25 | 50 | 75 | 100);
+
     claimItemsRows.push({
       item_id: sel.item_id,
+      units: Number(units.toFixed(2)),
       share_fraction: Number(fraction.toFixed(4)),
-      share_percent: sel.share_percent,
+      share_percent: sharePct,
     });
   }
 
@@ -197,6 +208,7 @@ export async function POST(req: Request) {
       claimItemsRows.map((r) => ({
         claim_id: claimId,
         item_id: r.item_id,
+        units: r.units,
         share_fraction: r.share_fraction,
         share_percent: r.share_percent,
       }))

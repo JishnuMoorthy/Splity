@@ -51,17 +51,19 @@ export async function getPublicBill(
   // Pull all claims with their item junctions (for "claimed by" display)
   const { data: claims } = await sb
     .from("claims")
-    .select("id, claimer_name, claim_items(item_id, share_fraction)")
+    .select("id, claimer_name, claim_items(item_id, share_fraction, units)")
     .eq("bill_id", billRow.id);
 
-  const byItem = new Map<
-    string,
-    Array<{ name: string | null; share_fraction: number }>
-  >();
+  type Claimer = { name: string | null; share_fraction: number; units: number };
+  const byItem = new Map<string, Array<Claimer>>();
   for (const c of claims ?? []) {
     type CRow = {
       claimer_name: string | null;
-      claim_items: Array<{ item_id: string; share_fraction: number }>;
+      claim_items: Array<{
+        item_id: string;
+        share_fraction: number;
+        units: number;
+      }>;
     };
     const cr = c as unknown as CRow;
     for (const ci of cr.claim_items ?? []) {
@@ -69,6 +71,7 @@ export async function getPublicBill(
       list.push({
         name: cr.claimer_name,
         share_fraction: Number(ci.share_fraction),
+        units: Number(ci.units),
       });
       byItem.set(ci.item_id, list);
     }
@@ -85,9 +88,10 @@ export async function getPublicBill(
     payer: billRow.payer,
     items: [...billRow.items]
       .sort((a, b) => a.position - b.position)
-      .map((it) => ({
-        ...it,
-        claimed_by: byItem.get(it.id) ?? [],
-      })),
+      .map((it) => {
+        const claimers = byItem.get(it.id) ?? [];
+        const claimed_units = claimers.reduce((s, c) => s + c.units, 0);
+        return { ...it, claimed_units, claimed_by: claimers };
+      }),
   };
 }
