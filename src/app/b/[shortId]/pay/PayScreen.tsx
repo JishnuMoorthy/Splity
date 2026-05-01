@@ -9,13 +9,18 @@ export function PayScreen({
   bill,
   amountCents,
   claimId,
+  initialPaidAt,
+  initialConfirmedAt,
 }: {
   bill: PublicBill;
   amountCents: number;
   claimId: string | null;
+  initialPaidAt: string | null;
+  initialConfirmedAt: string | null;
 }) {
   const [sessionId, setSessionId] = useState("");
-  const [paid, setPaid] = useState(false);
+  const [paid, setPaid] = useState(!!initialPaidAt);
+  const confirmed = !!initialConfirmedAt;
   const [zelleCopied, setZelleCopied] = useState(false);
 
   useEffect(() => {
@@ -111,9 +116,14 @@ export function PayScreen({
         ) : null}
       </div>
 
-      {paid ? (
+      {confirmed ? (
         <p className="mt-6 text-center text-sm text-[var(--color-success)]">
-          Marked as paid. Thanks!
+          ✓ {bill.payer.display_name} confirmed receipt. You&apos;re all set.
+        </p>
+      ) : paid ? (
+        <p className="mt-6 text-center text-sm text-[var(--color-muted)]">
+          Marked as paid — awaiting confirmation from{" "}
+          {bill.payer.display_name}.
         </p>
       ) : (
         <p className="mt-8 text-center text-xs text-[var(--color-muted)]">

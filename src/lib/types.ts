@@ -40,7 +40,12 @@ export type Claim = {
   claimer_session_id: string;
   total_cents: number;
   payment_method: "venmo" | "zelle" | "cashapp" | "other" | null;
+  // Set when the payee taps a payment-method button on the pay screen,
+  // i.e. they assert they sent the money.
   paid_at: string | null;
+  // Set by the payer (bill creator) once they verify the funds arrived.
+  // Two-step: paid_at → payer_confirmed_at.
+  payer_confirmed_at: string | null;
   created_at: string;
 };
 

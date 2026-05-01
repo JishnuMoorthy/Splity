@@ -60,7 +60,7 @@ export function BillCard({
 
   return (
     <div className="block p-4 rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
-      <Link href={`/b/${bill.short_id}`} className="block">
+      <Link href={`/me/b/${bill.short_id}`} className="block">
         <div className="flex items-baseline justify-between gap-3">
           <div className="min-w-0">
             <div className="font-medium truncate">
