@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { signOutAction } from "./actions";
-import { BillCard } from "./BillCard";
+import { BillsList } from "./BillsList";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +22,35 @@ export default async function MePage() {
 
   if (!payer) redirect("/me/payment-methods?first=1");
 
-  const { data: bills } = await supabase
+  const { data: billsRaw } = await supabase
     .from("bills")
     .select("id, short_id, restaurant_name, total_cents, created_at, status, receipt_path")
     .eq("payer_id", payer.id)
     .order("created_at", { ascending: false });
+
+  const billIds = (billsRaw ?? []).map((b) => b.id);
+  const claimedByBill = new Map<string, { claimed: number; confirmed: number }>();
+  if (billIds.length > 0) {
+    const { data: claims } = await supabase
+      .from("claims")
+      .select("bill_id, total_cents, payer_confirmed_at, is_payer_self")
+      .in("bill_id", billIds);
+    for (const c of claims ?? []) {
+      const bucket = claimedByBill.get(c.bill_id) ?? { claimed: 0, confirmed: 0 };
+      bucket.claimed += c.total_cents;
+      if (c.payer_confirmed_at || c.is_payer_self) bucket.confirmed += c.total_cents;
+      claimedByBill.set(c.bill_id, bucket);
+    }
+  }
+
+  const bills = (billsRaw ?? []).map((b) => {
+    const totals = claimedByBill.get(b.id) ?? { claimed: 0, confirmed: 0 };
+    return {
+      ...b,
+      claimed_cents: totals.claimed,
+      confirmed_cents: totals.confirmed,
+    };
+  });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
@@ -60,20 +84,8 @@ export default async function MePage() {
         Edit payment methods
       </Link>
 
-      <div className="mt-10 space-y-3">
-        {!bills || bills.length === 0 ? (
-          <p className="text-sm text-[var(--color-muted)] text-center py-8">
-            No bills yet. Upload a receipt to get started.
-          </p>
-        ) : (
-          bills.map((b) => (
-            <BillCard
-              key={b.id}
-              bill={{ ...b, has_receipt: !!b.receipt_path }}
-              appUrl={appUrl}
-            />
-          ))
-        )}
+      <div className="mt-10">
+        <BillsList bills={bills} appUrl={appUrl} />
       </div>
     </AppShell>
   );
