@@ -1,36 +1,63 @@
-// Smoke checks for money math (run with `node --test`).
-// We avoid pulling in vitest/jest for MVP — assert via node:test.
+import { describe, expect, it } from "vitest";
+import {
+  calculateClaimerTotal,
+  centsToDollarString,
+  dollarsToCents,
+  formatCents,
+} from "./money";
 
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import { calculateClaimerTotal, dollarsToCents, formatCents } from "./money";
-
-test("zero subtotal short-circuits to 0", () => {
-  assert.equal(calculateClaimerTotal(0, 0, 500, 200), 0);
-});
-
-test("proportional tax + tip", () => {
-  // bill: subtotal 10000, tax 800, tip 2000, total 12800
-  // claimer subtotal 2500 (25%) → tax 200, tip 500, total 3200
-  assert.equal(
-    calculateClaimerTotal(2500, 10000, 800, 2000),
-    2500 + 200 + 500
+describe("dollarsToCents", () => {
+  it.each([
+    ["12.50", 1250],
+    ["12.5", 1250],
+    ["0.5", 50],
+    [".5", 50],
+    ["0", 0],
+    ["", 0],
+    ["abc", 0],
+    ["1.005", 100],
+    ["1.999", 200],
+    [12.5, 1250],
+    [7, 700],
+  ] as Array<[string | number, number]>)(
+    "dollarsToCents(%j) === %i",
+    (input, expected) => {
+      expect(dollarsToCents(input)).toBe(expected);
+    }
   );
 });
 
-test("rounding stays to nearest cent", () => {
-  // 333/1000 = 0.333 → tax of 100 -> 33.3 -> 33
-  assert.equal(calculateClaimerTotal(333, 1000, 100, 0), 333 + 33);
+describe("centsToDollarString", () => {
+  it.each([
+    [0, ""],
+    [50, "0.50"],
+    [1250, "12.50"],
+    [99, "0.99"],
+    [100000, "1000.00"],
+  ])("centsToDollarString(%i) === %j", (cents, expected) => {
+    expect(centsToDollarString(cents)).toBe(expected);
+  });
 });
 
-test("dollarsToCents handles strings and floats", () => {
-  assert.equal(dollarsToCents("12.50"), 1250);
-  assert.equal(dollarsToCents("0.05"), 5);
-  assert.equal(dollarsToCents(""), 0);
-  assert.equal(dollarsToCents(7), 700);
+describe("formatCents", () => {
+  it("formats USD with two decimals", () => {
+    expect(formatCents(1250)).toBe("$12.50");
+    expect(formatCents(0)).toBe("$0.00");
+  });
 });
 
-test("formatCents prints USD with two decimals", () => {
-  assert.equal(formatCents(1250), "$12.50");
-  assert.equal(formatCents(0), "$0.00");
+describe("calculateClaimerTotal", () => {
+  it("returns 0 when bill subtotal is 0", () => {
+    expect(calculateClaimerTotal(0, 0, 500, 200)).toBe(0);
+  });
+
+  it("allocates tax+tip proportionally", () => {
+    expect(calculateClaimerTotal(2500, 10000, 800, 2000)).toBe(
+      2500 + 200 + 500
+    );
+  });
+
+  it("rounds to nearest cent", () => {
+    expect(calculateClaimerTotal(333, 1000, 100, 0)).toBe(333 + 33);
+  });
 });

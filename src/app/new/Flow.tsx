@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { dollarsToCents, formatCents, centsToDollarString } from "@/lib/money";
+import { formatCents } from "@/lib/money";
+import { MoneyInput } from "@/components/MoneyInput";
+import { QuantityInput } from "@/components/QuantityInput";
 import { createBillAction } from "./actions";
 
 type DraftItem = {
@@ -343,29 +345,20 @@ export function NewBillFlow() {
                 className="flex-1 px-2 py-2 bg-transparent focus:outline-none"
               />
               <span className="text-[var(--color-muted)] font-mono">$</span>
-              <input
-                inputMode="decimal"
-                value={centsToDollarString(it.price_cents)}
-                onChange={(e) =>
-                  update(idx, { price_cents: dollarsToCents(e.target.value) })
-                }
-                onFocus={(e) => e.currentTarget.select()}
-                placeholder="0.00"
+              <MoneyInput
+                cents={it.price_cents}
+                onChange={(c) => update(idx, { price_cents: c })}
+                aria-label="Item price"
                 className="w-20 min-w-0 px-2 py-2 bg-transparent text-right focus:outline-none font-mono"
               />
             </div>
             <div className="flex gap-3 items-center mt-2 text-xs text-[var(--color-muted)]">
               <label className="flex items-center gap-1">
                 Qty
-                <input
-                  type="number"
-                  min={1}
+                <QuantityInput
                   value={it.quantity}
-                  onChange={(e) =>
-                    update(idx, {
-                      quantity: Math.max(1, parseInt(e.target.value) || 1),
-                    })
-                  }
+                  onChange={(q) => update(idx, { quantity: q })}
+                  aria-label="Quantity"
                   className="w-12 ml-1 px-1 py-0.5 bg-transparent border-b border-[var(--color-divider)] focus:outline-none focus:border-[var(--color-accent)]"
                 />
               </label>
@@ -459,12 +452,10 @@ function DollarField({
       <span className="text-xs text-[var(--color-muted)]">{label}</span>
       <div className="mt-1 flex items-center w-full px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-divider)] focus-within:border-[var(--color-accent)]">
         <span className="text-[var(--color-muted)] font-mono">$</span>
-        <input
-          inputMode="decimal"
-          value={centsToDollarString(cents)}
-          onChange={(e) => onChange(dollarsToCents(e.target.value))}
-          onFocus={(e) => e.currentTarget.select()}
-          placeholder="0.00"
+        <MoneyInput
+          cents={cents}
+          onChange={onChange}
+          aria-label={label}
           className="flex-1 min-w-0 ml-1 bg-transparent text-right focus:outline-none font-mono"
         />
       </div>

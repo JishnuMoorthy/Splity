@@ -2,12 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  calculateClaimerTotal,
-  centsToDollarString,
-  dollarsToCents,
-  formatCents,
-} from "@/lib/money";
+import { calculateClaimerTotal, formatCents } from "@/lib/money";
+import { MoneyInput } from "@/components/MoneyInput";
 import type { PublicBill } from "@/lib/types";
 
 type Mode = "items" | "custom";
@@ -417,12 +413,11 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
               <span className="text-[var(--color-muted)] font-mono text-lg">
                 $
               </span>
-              <input
-                inputMode="decimal"
+              <MoneyInput
+                cents={customCents}
+                onChange={setCustomCents}
                 autoFocus
-                value={centsToDollarString(customCents)}
-                onChange={(e) => setCustomCents(dollarsToCents(e.target.value))}
-                placeholder="0.00"
+                aria-label="Custom amount"
                 className="flex-1 ml-2 bg-transparent focus:outline-none font-mono text-lg"
               />
             </div>
