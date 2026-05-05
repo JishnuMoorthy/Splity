@@ -68,7 +68,7 @@ export default async function Home() {
       </section>
 
       <footer className="px-6 py-8 text-center text-xs text-[var(--color-muted)] space-x-3">
-        <span>Splity · Built for friends who hate doing math at dinner.</span>
+        <span>Splity · Made for Friends</span>
         <Link href="/privacy" className="underline-offset-4 hover:underline">
           Privacy
         </Link>

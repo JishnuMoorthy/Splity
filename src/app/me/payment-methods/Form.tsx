@@ -4,11 +4,16 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { upsertPayerAction } from "../actions";
 
+type Country = "US" | "IN";
+
 type Initial = {
   display_name?: string | null;
+  country?: Country | null;
   venmo_handle?: string | null;
   zelle_contact?: string | null;
   cashapp_handle?: string | null;
+  upi_id?: string | null;
+  paytm_phone?: string | null;
 } | null;
 
 export function PaymentMethodsForm({ initial }: { initial: Initial }) {
@@ -16,10 +21,12 @@ export function PaymentMethodsForm({ initial }: { initial: Initial }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [country, setCountry] = useState<Country>(initial?.country ?? "US");
 
   function onSubmit(formData: FormData) {
     setError(null);
     setSaved(false);
+    formData.set("country", country);
     startTransition(async () => {
       const result = await upsertPayerAction(formData);
       if (result?.error) {
@@ -41,26 +48,67 @@ export function PaymentMethodsForm({ initial }: { initial: Initial }) {
         defaultValue={initial?.display_name ?? ""}
         required
       />
-      <Field
-        label="Venmo handle"
-        name="venmo_handle"
-        placeholder="your-venmo-handle"
-        defaultValue={initial?.venmo_handle ?? ""}
-        prefix="@"
-      />
-      <Field
-        label="Cash App $cashtag"
-        name="cashapp_handle"
-        placeholder="yourcashtag"
-        defaultValue={initial?.cashapp_handle ?? ""}
-        prefix="$"
-      />
-      <Field
-        label="Zelle (phone or email)"
-        name="zelle_contact"
-        placeholder="phone or email"
-        defaultValue={initial?.zelle_contact ?? ""}
-      />
+
+      <fieldset>
+        <legend className="text-sm text-[var(--color-ink)]">Country</legend>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <CountryRadio
+            value="US"
+            label="🇺🇸 United States"
+            current={country}
+            onSelect={setCountry}
+          />
+          <CountryRadio
+            value="IN"
+            label="🇮🇳 India"
+            current={country}
+            onSelect={setCountry}
+          />
+        </div>
+        <p className="mt-1 text-xs text-[var(--color-muted)]">
+          We&apos;ll show the right payment apps for where your friends are.
+        </p>
+      </fieldset>
+
+      {country === "US" ? (
+        <>
+          <Field
+            label="Venmo handle"
+            name="venmo_handle"
+            placeholder="your-venmo-handle"
+            defaultValue={initial?.venmo_handle ?? ""}
+            prefix="@"
+          />
+          <Field
+            label="Cash App $cashtag"
+            name="cashapp_handle"
+            placeholder="yourcashtag"
+            defaultValue={initial?.cashapp_handle ?? ""}
+            prefix="$"
+          />
+          <Field
+            label="Zelle (phone or email)"
+            name="zelle_contact"
+            placeholder="phone or email"
+            defaultValue={initial?.zelle_contact ?? ""}
+          />
+        </>
+      ) : (
+        <>
+          <Field
+            label="UPI ID (works with GPay, PhonePe, BHIM…)"
+            name="upi_id"
+            placeholder="yourname@oksbi"
+            defaultValue={initial?.upi_id ?? ""}
+          />
+          <Field
+            label="PayTM phone"
+            name="paytm_phone"
+            placeholder="+91XXXXXXXXXX"
+            defaultValue={initial?.paytm_phone ?? ""}
+          />
+        </>
+      )}
 
       {error ? (
         <p className="text-sm text-[var(--color-error)]">{error}</p>
@@ -77,6 +125,30 @@ export function PaymentMethodsForm({ initial }: { initial: Initial }) {
         {pending ? "Saving…" : "Save"}
       </button>
     </form>
+  );
+}
+
+function CountryRadio(props: {
+  value: Country;
+  label: string;
+  current: Country;
+  onSelect: (c: Country) => void;
+}) {
+  const selected = props.current === props.value;
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={() => props.onSelect(props.value)}
+      className={`tap px-3 py-2.5 rounded-[var(--radius-md)] border text-sm font-medium ${
+        selected
+          ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
+          : "bg-[var(--color-surface)] text-[var(--color-ink)] border-[var(--color-divider)]"
+      }`}
+    >
+      {props.label}
+    </button>
   );
 }
 

@@ -1,11 +1,16 @@
+export type Country = "US" | "IN";
+
 export type Payer = {
   id: string;
   user_id: string;
   phone: string;
   display_name: string;
+  country: Country;
   venmo_handle: string | null;
   zelle_contact: string | null;
   cashapp_handle: string | null;
+  upi_id: string | null;
+  paytm_phone: string | null;
 };
 
 export type BillItem = {
@@ -72,9 +77,12 @@ export type PublicBill = {
   payer_user_id: string;
   payer: {
     display_name: string;
+    country: Country;
     venmo_handle: string | null;
     zelle_contact: string | null;
     cashapp_handle: string | null;
+    upi_id: string | null;
+    paytm_phone: string | null;
   };
   items: Array<{
     id: string;

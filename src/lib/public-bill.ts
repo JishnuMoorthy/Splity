@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import type { PublicBill } from "@/lib/types";
+import type { Country, PublicBill } from "@/lib/types";
 
 // Service-role read of a public bill by short_id. Strips sensitive fields.
 export async function getPublicBill(
@@ -12,7 +12,7 @@ export async function getPublicBill(
     .select(
       `
       id, short_id, restaurant_name, subtotal_cents, tax_cents, tip_cents, total_cents, receipt_path,
-      payer:payers (user_id, display_name, venmo_handle, zelle_contact, cashapp_handle),
+      payer:payers (user_id, display_name, country, venmo_handle, zelle_contact, cashapp_handle, upi_id, paytm_phone),
       items:bill_items (id, name, price_cents, quantity, is_shared, position, assigned_to)
       `
     )
@@ -34,9 +34,12 @@ export async function getPublicBill(
     payer: {
       user_id: string;
       display_name: string;
+      country: Country | null;
       venmo_handle: string | null;
       zelle_contact: string | null;
       cashapp_handle: string | null;
+      upi_id: string | null;
+      paytm_phone: string | null;
     };
     items: Array<{
       id: string;
@@ -102,9 +105,12 @@ export async function getPublicBill(
     payer_user_id: billRow.payer.user_id,
     payer: {
       display_name: billRow.payer.display_name,
+      country: billRow.payer.country ?? "US",
       venmo_handle: billRow.payer.venmo_handle,
       zelle_contact: billRow.payer.zelle_contact,
       cashapp_handle: billRow.payer.cashapp_handle,
+      upi_id: billRow.payer.upi_id,
+      paytm_phone: billRow.payer.paytm_phone,
     },
     items: [...billRow.items]
       .sort((a, b) => a.position - b.position)

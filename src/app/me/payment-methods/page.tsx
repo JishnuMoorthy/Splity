@@ -21,7 +21,9 @@ export default async function PaymentMethodsPage({
 
   const { data: payer } = await supabase
     .from("payers")
-    .select("display_name, venmo_handle, zelle_contact, cashapp_handle")
+    .select(
+      "display_name, country, venmo_handle, zelle_contact, cashapp_handle, upi_id, paytm_phone"
+    )
     .eq("user_id", user.id)
     .maybeSingle();
 

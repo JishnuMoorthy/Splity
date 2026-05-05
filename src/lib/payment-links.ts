@@ -21,3 +21,38 @@ export function cashAppUrl(opts: {
   const amount = (opts.amountCents / 100).toFixed(2);
   return `https://cash.app/$${encodeURIComponent(handle)}/${amount}`;
 }
+
+// Universal UPI deep link — opens any UPI app on Android (GPay, PhonePe,
+// PayTM, BHIM, …). On iOS, browsers prompt with the installed UPI app.
+export function upiUrl(opts: {
+  vpa: string;
+  payeeName: string;
+  amountCents: number;
+  note: string;
+}): string {
+  const amount = (opts.amountCents / 100).toFixed(2);
+  const params = new URLSearchParams({
+    pa: opts.vpa,
+    pn: opts.payeeName,
+    am: amount,
+    cu: "INR",
+    tn: opts.note,
+  });
+  return `upi://pay?${params.toString()}`;
+}
+
+// PayTM uses phone-as-VPA (`<phone>@paytm`) under the hood. Same UPI rail.
+export function paytmUrl(opts: {
+  phone: string;
+  payeeName: string;
+  amountCents: number;
+  note: string;
+}): string {
+  const phone = opts.phone.replace(/\D/g, "");
+  return upiUrl({
+    vpa: `${phone}@paytm`,
+    payeeName: opts.payeeName,
+    amountCents: opts.amountCents,
+    note: opts.note,
+  });
+}

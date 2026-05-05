@@ -11,6 +11,11 @@ export async function signOutAction() {
   redirect("/");
 }
 
+function clean(s: FormDataEntryValue | null): string | null {
+  const v = String(s ?? "").trim();
+  return v.length > 0 ? v : null;
+}
+
 export async function upsertPayerAction(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -19,30 +24,46 @@ export async function upsertPayerAction(formData: FormData) {
   if (!user) redirect("/auth");
 
   const display_name = String(formData.get("display_name") ?? "").trim();
-  const venmo_handle =
-    String(formData.get("venmo_handle") ?? "").trim().replace(/^@/, "") || null;
-  const zelle_contact =
-    String(formData.get("zelle_contact") ?? "").trim() || null;
+  const countryRaw = String(formData.get("country") ?? "US").toUpperCase();
+  const country = countryRaw === "IN" ? "IN" : "US";
+
+  const venmo_handle = clean(formData.get("venmo_handle"))?.replace(/^@/, "") ?? null;
+  const zelle_contact = clean(formData.get("zelle_contact"));
   const cashapp_handle =
-    String(formData.get("cashapp_handle") ?? "").trim().replace(/^\$/, "") ||
-    null;
+    clean(formData.get("cashapp_handle"))?.replace(/^\$/, "") ?? null;
+  const upi_id = clean(formData.get("upi_id"));
+  const paytm_phone = clean(formData.get("paytm_phone"))?.replace(/[^\d+]/g, "") ?? null;
 
   if (!display_name) {
     return { error: "Display name is required" };
   }
-  if (!venmo_handle && !zelle_contact && !cashapp_handle) {
+  if (country === "US" && !venmo_handle && !zelle_contact && !cashapp_handle) {
     return { error: "Add at least one payment method (Venmo, Zelle, or Cash App)" };
   }
+  if (country === "IN" && !upi_id && !paytm_phone) {
+    return { error: "Add at least one payment method (UPI ID or PayTM phone)" };
+  }
+
+  // Coerce empty strings to null defensively. The phone unique constraint was
+  // dropped in 0007, but other unique columns (email) still treat NULLs as
+  // distinct rows — empty strings would collide.
+  const phoneVal = user.phone?.trim() || null;
+  const emailVal = user.email?.trim().toLowerCase() || null;
 
   const { error } = await supabase.from("payers").upsert(
     {
       user_id: user.id,
-      phone: user.phone ?? null,
-      email: user.email ?? null,
+      phone: phoneVal,
+      email: emailVal,
       display_name,
+      country,
+      // Persist all four payment fields regardless of country so switching
+      // back doesn't require re-entry. The form only edits the visible ones.
       venmo_handle,
       zelle_contact,
       cashapp_handle,
+      upi_id,
+      paytm_phone,
     },
     { onConflict: "user_id" }
   );
