@@ -24,15 +24,25 @@ type Draft = {
   receipt_path: string | null;
 };
 
+type CreatedItem = {
+  id: string;
+  name: string;
+  price_cents: number;
+  quantity: number;
+};
+
 export function NewBillFlow() {
   const router = useRouter();
-  const [stage, setStage] = useState<"upload" | "loading" | "validate" | "done">(
-    "upload"
-  );
+  const [stage, setStage] = useState<
+    "upload" | "loading" | "validate" | "cover" | "done"
+  >("upload");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [doneShortId, setDoneShortId] = useState<string | null>(null);
+  const [createdItems, setCreatedItems] = useState<CreatedItem[]>([]);
+  const [coveredIds, setCoveredIds] = useState<Set<string>>(new Set());
+  const [savingCover, setSavingCover] = useState(false);
   const [copied, setCopied] = useState(false);
   const cameraInput = useRef<HTMLInputElement>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
@@ -218,10 +228,53 @@ export function NewBillFlow() {
       }
       if (res?.short_id) {
         setDoneShortId(res.short_id);
-        setStage("done");
+        setCreatedItems(res.items ?? []);
+        // Skip the cover step entirely if there's nothing to cover
+        // (e.g. only auto-assigned lines).
+        setStage((res.items?.length ?? 0) > 0 ? "cover" : "done");
         router.refresh();
       }
     });
+  }
+
+  function toggleCovered(itemId: string) {
+    setCoveredIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
+
+  async function submitCover(skip: boolean) {
+    if (!doneShortId) return;
+    setError(null);
+    if (skip || coveredIds.size === 0) {
+      setStage("done");
+      return;
+    }
+    setSavingCover(true);
+    try {
+      const res = await fetch("/api/claims/payer-self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          short_id: doneShortId,
+          item_ids: Array.from(coveredIds),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Couldn't save coverage. You can still share.");
+        // Don't block the user — let them share anyway.
+      }
+      setStage("done");
+    } catch {
+      setError("Network error saving coverage. You can still share.");
+      setStage("done");
+    } finally {
+      setSavingCover(false);
+    }
   }
 
   async function copyDoneLink() {
@@ -258,6 +311,106 @@ export function NewBillFlow() {
     } else {
       copyDoneLink();
     }
+  }
+
+  if (stage === "cover" && doneShortId) {
+    const coveredTotal = createdItems
+      .filter((it) => coveredIds.has(it.id))
+      .reduce((s, it) => s + it.price_cents * it.quantity, 0);
+    return (
+      <div className="reveal mt-6 space-y-5 pb-32">
+        <div>
+          <div className="font-display text-3xl text-[var(--color-ink)]">
+            Anything you&apos;re covering?
+          </div>
+          <p className="text-[var(--color-muted)] mt-1 text-sm">
+            Tap items you&apos;re paying for yourself — drinks you bought,
+            things nobody else ordered. They won&apos;t show up as claimable
+            on the share page.
+          </p>
+        </div>
+
+        <ul className="space-y-2">
+          {createdItems.map((it) => {
+            const checked = coveredIds.has(it.id);
+            return (
+              <li key={it.id}>
+                <button
+                  type="button"
+                  onClick={() => toggleCovered(it.id)}
+                  aria-pressed={checked}
+                  className={`tap w-full flex items-center justify-between gap-3 px-4 py-3 rounded-[var(--radius-md)] border text-left ${
+                    checked
+                      ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
+                      : "bg-[var(--color-surface)] text-[var(--color-ink)] border-[var(--color-divider)]"
+                  }`}
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <span
+                      className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
+                        checked
+                          ? "border-white bg-white text-[var(--color-accent)]"
+                          : "border-[var(--color-divider)]"
+                      }`}
+                    >
+                      {checked ? "✓" : ""}
+                    </span>
+                    <span className="truncate">
+                      {it.name}
+                      {it.quantity > 1 ? (
+                        <span
+                          className={`ml-1 text-xs ${
+                            checked ? "opacity-80" : "text-[var(--color-muted)]"
+                          }`}
+                        >
+                          × {it.quantity}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                  <span className="font-mono whitespace-nowrap">
+                    {formatCents(it.price_cents * it.quantity)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {error ? (
+          <p className="text-sm text-[var(--color-error)]">{error}</p>
+        ) : null}
+
+        <div className="fixed bottom-0 inset-x-0 px-6 pt-3 pb-6 bg-[var(--color-bg)] border-t border-[var(--color-divider)]">
+          <div className="max-w-xl mx-auto">
+            <div className="flex justify-between text-sm text-[var(--color-muted)]">
+              <span>You&apos;re covering</span>
+              <span className="font-mono">{formatCents(coveredTotal)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => submitCover(false)}
+              disabled={savingCover}
+              className="tap w-full mt-3 px-6 py-3.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-medium disabled:opacity-60"
+            >
+              {savingCover
+                ? "Saving…"
+                : coveredIds.size > 0
+                  ? `Continue — covering ${coveredIds.size} item${coveredIds.size === 1 ? "" : "s"}`
+                  : "Continue without covering anything"}
+            </button>
+            <button
+              type="button"
+              onClick={() => submitCover(true)}
+              disabled={savingCover}
+              className="tap w-full mt-2 px-6 py-2.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (stage === "done" && doneShortId) {

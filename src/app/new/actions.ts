@@ -76,24 +76,48 @@ export async function createBillAction(payloadJson: string) {
     return { error: billErr?.message ?? "Failed to create bill" };
   }
 
-  const { error: itemsErr } = await supabase.from("bill_items").insert(
-    parsed.items.map((it, idx) => ({
-      bill_id: bill.id,
-      name: it.name,
-      price_cents: it.price_cents,
-      quantity: it.quantity,
-      is_shared: it.is_shared,
-      assigned_to: it.assigned_to ?? null,
-      position: idx,
-    }))
-  );
+  const { data: insertedItems, error: itemsErr } = await supabase
+    .from("bill_items")
+    .insert(
+      parsed.items.map((it, idx) => ({
+        bill_id: bill.id,
+        name: it.name,
+        price_cents: it.price_cents,
+        quantity: it.quantity,
+        is_shared: it.is_shared,
+        assigned_to: it.assigned_to ?? null,
+        position: idx,
+      }))
+    )
+    .select("id, name, price_cents, quantity, position");
 
   if (itemsErr) {
     await supabase.from("bills").delete().eq("id", bill.id);
     return { error: itemsErr.message };
   }
 
-  return { ok: true, short_id: bill.short_id };
+  const items = (insertedItems ?? [])
+    .slice()
+    .sort(
+      (a, b) =>
+        (a as { position: number }).position - (b as { position: number }).position
+    )
+    .map((it) => {
+      const row = it as {
+        id: string;
+        name: string;
+        price_cents: number;
+        quantity: number;
+      };
+      return {
+        id: row.id,
+        name: row.name,
+        price_cents: row.price_cents,
+        quantity: row.quantity,
+      };
+    });
+
+  return { ok: true, short_id: bill.short_id, items };
 }
 
 // Re-export for type usage in client
