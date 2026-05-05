@@ -23,12 +23,13 @@ export function cashAppUrl(opts: {
 }
 
 // Universal UPI deep link — opens any UPI app on Android (GPay, PhonePe,
-// PayTM, BHIM, …). On iOS, browsers prompt with the installed UPI app.
+// PayTM, BHIM, …). On iOS, the registered app handles the upi:// scheme.
 export function upiUrl(opts: {
   vpa: string;
   payeeName: string;
   amountCents: number;
   note: string;
+  scheme?: "upi" | "tez" | "phonepe" | "paytmmp";
 }): string {
   const amount = (opts.amountCents / 100).toFixed(2);
   const params = new URLSearchParams({
@@ -38,10 +39,23 @@ export function upiUrl(opts: {
     cu: "INR",
     tn: opts.note,
   });
-  return `upi://pay?${params.toString()}`;
+  return `${opts.scheme ?? "upi"}://pay?${params.toString()}`;
 }
 
-// PayTM uses phone-as-VPA (`<phone>@paytm`) under the hood. Same UPI rail.
+// Google Pay India (Tez). Uses the `tez://` URL scheme so the system jumps
+// straight into GPay instead of showing a UPI app picker.
+export function gpayUrl(opts: {
+  vpa: string;
+  payeeName: string;
+  amountCents: number;
+  note: string;
+}): string {
+  return upiUrl({ ...opts, scheme: "tez" });
+}
+
+// PayTM. Two ways: register UPI handler via `paytmmp://` scheme (opens
+// PayTM directly), and use phone-as-VPA via `<phone>@paytm` so PayTM
+// resolves the recipient. Same UPI rail underneath.
 export function paytmUrl(opts: {
   phone: string;
   payeeName: string;
@@ -54,5 +68,6 @@ export function paytmUrl(opts: {
     payeeName: opts.payeeName,
     amountCents: opts.amountCents,
     note: opts.note,
+    scheme: "paytmmp",
   });
 }

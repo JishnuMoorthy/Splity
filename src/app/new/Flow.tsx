@@ -83,12 +83,25 @@ export function NewBillFlow() {
     setStage("validate");
   }
 
+  function startManualEntry() {
+    setError(null);
+    setDraft({
+      restaurant_name: "",
+      items: [
+        { name: "", price_cents: 0, quantity: 1, is_shared: false, assigned_name: "" },
+      ],
+      tax_cents: 0,
+      tip_cents: 0,
+      receipt_path: null,
+    });
+    setStage("validate");
+  }
+
   if (stage === "upload") {
     return (
       <div className="reveal mt-6 space-y-4">
         <p className="text-[var(--color-muted)]">
-          Snap or upload a receipt — restaurant, gas, tickets, anything.
-          PDFs from email work too.
+          Snap a receipt, upload one, or enter items by hand.
         </p>
         <button
           type="button"
@@ -108,6 +121,16 @@ export function NewBillFlow() {
           <div className="font-display text-xl">Upload a file</div>
           <div className="text-xs text-[var(--color-muted)] mt-1">
             Image or PDF from your library
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={startManualEntry}
+          className="tap w-full px-6 py-8 rounded-[var(--radius-lg)] bg-[var(--color-surface)] border-2 border-dashed border-[var(--color-divider)] text-[var(--color-ink)]"
+        >
+          <div className="font-display text-xl">Enter it yourself</div>
+          <div className="text-xs text-[var(--color-muted)] mt-1">
+            No receipt? Type the items in.
           </div>
         </button>
         <input

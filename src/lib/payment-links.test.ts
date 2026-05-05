@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { venmoUrl, cashAppUrl, upiUrl, paytmUrl } from "./payment-links";
+import {
+  venmoUrl,
+  cashAppUrl,
+  upiUrl,
+  gpayUrl,
+  paytmUrl,
+} from "./payment-links";
 
 describe("venmoUrl", () => {
   it("strips leading @ and url-encodes the note", () => {
@@ -49,14 +55,31 @@ describe("upiUrl", () => {
   });
 });
 
+describe("gpayUrl", () => {
+  it("uses tez:// scheme to open Google Pay India directly", () => {
+    const url = gpayUrl({
+      vpa: "joe@oksbi",
+      payeeName: "Joe",
+      amountCents: 5000,
+      note: "Pizza",
+    });
+    expect(url.startsWith("tez://pay?")).toBe(true);
+    const params = new URLSearchParams(url.split("?")[1]);
+    expect(params.get("pa")).toBe("joe@oksbi");
+    expect(params.get("am")).toBe("50.00");
+    expect(params.get("cu")).toBe("INR");
+  });
+});
+
 describe("paytmUrl", () => {
-  it("builds a paytm-VPA UPI link from a phone", () => {
+  it("uses paytmmp:// scheme so PayTM opens directly", () => {
     const url = paytmUrl({
       phone: "+91 98765 43210",
       payeeName: "Joe",
       amountCents: 12345,
       note: "Lunch",
     });
+    expect(url.startsWith("paytmmp://pay?")).toBe(true);
     const params = new URLSearchParams(url.split("?")[1]);
     expect(params.get("pa")).toBe("919876543210@paytm");
     expect(params.get("am")).toBe("123.45");
