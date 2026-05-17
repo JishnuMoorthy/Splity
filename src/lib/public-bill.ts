@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import type { Country, PublicBill } from "@/lib/types";
+import type { Country, Currency, PublicBill } from "@/lib/types";
 
 // Service-role read of a public bill by short_id. Strips sensitive fields.
 export async function getPublicBill(
@@ -11,7 +11,7 @@ export async function getPublicBill(
     .from("bills")
     .select(
       `
-      id, short_id, restaurant_name, subtotal_cents, tax_cents, tip_cents, total_cents, receipt_path,
+      id, short_id, restaurant_name, subtotal_cents, tax_cents, tip_cents, total_cents, currency, receipt_path,
       payer:payers (user_id, display_name, country, venmo_handle, zelle_contact, cashapp_handle, upi_id, paytm_phone),
       items:bill_items (id, name, price_cents, quantity, is_shared, position, assigned_to)
       `
@@ -30,6 +30,7 @@ export async function getPublicBill(
     tax_cents: number;
     tip_cents: number;
     total_cents: number;
+    currency: Currency | null;
     receipt_path: string | null;
     payer: {
       user_id: string;
@@ -100,6 +101,7 @@ export async function getPublicBill(
     tax_cents: billRow.tax_cents,
     tip_cents: billRow.tip_cents,
     total_cents: billRow.total_cents,
+    currency: billRow.currency ?? "USD",
     has_receipt: !!billRow.receipt_path,
     claimed_total_cents: claimedTotal,
     payer_user_id: billRow.payer.user_id,

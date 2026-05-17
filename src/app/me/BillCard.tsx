@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MoneyDisplay } from "@/components/MoneyDisplay";
-import { formatCents } from "@/lib/money";
+import { formatCents, type Currency } from "@/lib/money";
 import { deleteBillAction } from "./actions";
 
 export function BillCard({
@@ -20,9 +20,11 @@ export function BillCard({
     has_receipt?: boolean;
     claimed_cents?: number;
     confirmed_cents?: number;
+    currency?: Currency;
   };
   appUrl: string;
 }) {
+  const currency: Currency = bill.currency ?? "USD";
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
@@ -79,6 +81,7 @@ export function BillCard({
           </div>
           <MoneyDisplay
             cents={bill.total_cents}
+            currency={currency}
             className="text-[var(--color-ink)]"
           />
         </div>
@@ -93,7 +96,7 @@ export function BillCard({
             <div className="mt-3" aria-label="Coverage">
               <div className="flex items-baseline justify-between text-xs text-[var(--color-muted)]">
                 <span>
-                  {formatCents(claimed)} / {formatCents(total)} claimed
+                  {formatCents(claimed, currency)} / {formatCents(total, currency)} claimed
                 </span>
                 <span className="font-mono">{claimedPct}%</span>
               </div>
@@ -118,7 +121,7 @@ export function BillCard({
               </div>
               {confirmed > 0 ? (
                 <div className="mt-1 text-[10px] text-[var(--color-muted)]">
-                  {formatCents(confirmed)} confirmed received
+                  {formatCents(confirmed, currency)} confirmed received
                 </div>
               ) : null}
             </div>

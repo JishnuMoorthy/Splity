@@ -37,7 +37,7 @@ function AuthInner() {
   const searchParams = useSearchParams();
 
   const [mode, setMode] = useState<Mode>("phone");
-  const [step, setStep] = useState<"input" | "code" | "sent">("input");
+  const [step, setStep] = useState<"input" | "code">("input");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -48,6 +48,18 @@ function AuthInner() {
   useEffect(() => {
     const e = searchParams.get("error");
     if (e) setError(decodeURIComponent(e));
+    // If the callback redirected here after PKCE failure (link opened in a
+    // different browser), pre-fill email + jump straight to the code step.
+    const otherBrowser = searchParams.get("link_other_browser");
+    const emailParam = searchParams.get("email");
+    if (otherBrowser && emailParam) {
+      setMode("email");
+      setEmail(emailParam);
+      setStep("code");
+      setError(
+        "That link was opened in a different browser. Enter the 6-digit code from the same email instead."
+      );
+    }
   }, [searchParams]);
 
   function switchMode(next: Mode) {
@@ -105,6 +117,9 @@ function AuthInner() {
     setLoading(true);
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+    // Supabase emails BOTH the magic link AND a 6-digit token by default.
+    // We prefer the token (browser-independent) but keep the link for users
+    // who prefer to tap it on their phone.
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: { emailRedirectTo: `${appUrl}/auth/callback` },
@@ -114,7 +129,25 @@ function AuthInner() {
       setError(error.message);
       return;
     }
-    setStep("sent");
+    setStep("code");
+  }
+
+  async function verifyEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: "email",
+    });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    router.push("/me");
+    router.refresh();
   }
 
   return (
@@ -251,29 +284,58 @@ function AuthInner() {
               disabled={loading}
               className="tap w-full px-6 py-3.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-medium disabled:opacity-60"
             >
-              {loading ? "Sending…" : "Send magic link"}
+              {loading ? "Sending…" : "Send code"}
             </button>
           </form>
         ) : null}
 
-        {mode === "email" && step === "sent" ? (
-          <div className="reveal space-y-4">
-            <div className="font-display text-2xl text-[var(--color-ink)]">
-              Check your email
-            </div>
+        {mode === "email" && step === "code" ? (
+          <form onSubmit={verifyEmail} className="reveal space-y-5">
             <p className="text-[var(--color-muted)]">
-              We sent a magic sign-in link to{" "}
+              Enter the 6-digit code we emailed to{" "}
               <span className="font-mono text-[var(--color-ink)]">{email}</span>
-              . Tap the link from your phone to continue.
+              .
             </p>
+            <p className="text-xs text-[var(--color-muted)]">
+              The email also contains a one-tap link — use it only if you open
+              it in this same browser.
+            </p>
+            <label className="block">
+              <span className="text-sm text-[var(--color-ink)]">Code</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                className="mt-1 w-full px-4 py-3 rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-divider)] focus:outline-none focus:border-[var(--color-accent)] font-mono tracking-[0.3em] text-center text-lg"
+              />
+            </label>
+            {error ? (
+              <p className="text-sm text-[var(--color-error)]">{error}</p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={loading || code.length < 6}
+              className="tap w-full px-6 py-3.5 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-white font-medium disabled:opacity-60"
+            >
+              {loading ? "Verifying…" : "Verify and continue"}
+            </button>
             <button
               type="button"
-              onClick={() => switchMode("email")}
-              className="tap text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+              onClick={() => {
+                setStep("input");
+                setCode("");
+                setError(null);
+              }}
+              className="tap w-full px-6 py-3 rounded-[var(--radius-pill)] text-sm text-[var(--color-muted)] hover:bg-[var(--color-divider)]"
             >
               Use a different email
             </button>
-          </div>
+          </form>
         ) : null}
       </div>
     </AppShell>

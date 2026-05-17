@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatCents } from "@/lib/money";
+import { formatCents, type Currency } from "@/lib/money";
 
 type ClaimRow = {
   id: string;
@@ -17,10 +17,12 @@ type ClaimRow = {
 
 export function ClaimReview({
   billTotal,
+  currency = "USD",
   shortId,
   claims,
 }: {
   billTotal: number;
+  currency?: Currency;
   shortId: string;
   claims: ClaimRow[];
 }) {
@@ -61,13 +63,13 @@ export function ClaimReview({
   return (
     <div className="reveal mt-2">
       <div className="font-display text-2xl text-[var(--color-ink)]">
-        <span className="font-mono">{formatCents(billTotal)}</span> total
+        <span className="font-mono">{formatCents(billTotal, currency)}</span> total
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-        <Stat label="Claimed" value={totals.claimed} total={billTotal} />
-        <Stat label="Payee says paid" value={totals.payeeMarked} total={billTotal} />
-        <Stat label="You confirmed" value={totals.confirmed} total={billTotal} />
+        <Stat label="Claimed" value={totals.claimed} total={billTotal} currency={currency} />
+        <Stat label="Payee says paid" value={totals.payeeMarked} total={billTotal} currency={currency} />
+        <Stat label="You confirmed" value={totals.confirmed} total={billTotal} currency={currency} />
       </div>
 
       <div className="mt-2 text-xs text-[var(--color-muted)] truncate">
@@ -108,7 +110,7 @@ export function ClaimReview({
                     <StatusPill status={status} method={c.payment_method} />
                   </div>
                 </div>
-                <span className="font-mono">{formatCents(c.total_cents)}</span>
+                <span className="font-mono">{formatCents(c.total_cents, currency)}</span>
               </div>
 
               {!c.is_payer_self ? (
@@ -146,10 +148,12 @@ function Stat({
   label,
   value,
   total,
+  currency,
 }: {
   label: string;
   value: number;
   total: number;
+  currency: Currency;
 }) {
   const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
   return (
@@ -157,7 +161,7 @@ function Stat({
       <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
         {label}
       </div>
-      <div className="font-mono text-sm mt-1">{formatCents(value)}</div>
+      <div className="font-mono text-sm mt-1">{formatCents(value, currency)}</div>
       <div className="text-[10px] text-[var(--color-muted)] mt-0.5">{pct}%</div>
     </div>
   );

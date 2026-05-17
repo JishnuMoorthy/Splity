@@ -9,6 +9,7 @@ function makeBill(overrides: Partial<BillRow> = {}): BillRow {
     short_id: "abc123",
     restaurant_name: "Joe's Pizza",
     total_cents: 5000,
+    currency: "USD",
     created_at: "2026-05-01T12:00:00Z",
     receipt_path: null,
     claimed_cents: 2500,

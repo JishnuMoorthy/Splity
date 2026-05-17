@@ -1,4 +1,5 @@
 export type Country = "US" | "IN";
+export type Currency = "USD" | "INR";
 
 export type Payer = {
   id: string;
@@ -68,6 +69,7 @@ export type PublicBill = {
   tax_cents: number;
   tip_cents: number;
   total_cents: number;
+  currency: Currency;
   has_receipt: boolean;
   // Sum of claims.total_cents on this bill — what payees have committed to.
   // Note: counts both unpaid and paid claims (status is tracked separately).

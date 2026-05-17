@@ -21,8 +21,22 @@ export async function GET(req: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
+      // PKCE failure (most common cause: link opened in a different browser
+      // than where the email was sent). Bounce to /auth with a flag the
+      // form picks up — pre-fills the email + jumps to the code step so the
+      // user can paste the 6-digit code from the same email.
+      const isPkce =
+        /code verifier|pkce/i.test(error.message) || error.status === 400;
+      const emailHint = url.searchParams.get("email") ?? "";
+      const params = new URLSearchParams();
+      if (isPkce) {
+        params.set("link_other_browser", "1");
+        if (emailHint) params.set("email", emailHint);
+      } else {
+        params.set("error", error.message);
+      }
       return NextResponse.redirect(
-        new URL(`/auth?error=${encodeURIComponent(error.message)}`, url.origin)
+        new URL(`/auth?${params.toString()}`, url.origin)
       );
     }
 

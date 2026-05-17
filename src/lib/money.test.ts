@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateClaimerTotal,
   centsToDollarString,
+  currencySymbol,
   dollarsToCents,
   formatCents,
 } from "./money";
@@ -43,6 +44,27 @@ describe("formatCents", () => {
   it("formats USD with two decimals", () => {
     expect(formatCents(1250)).toBe("$12.50");
     expect(formatCents(0)).toBe("$0.00");
+  });
+
+  it("formats INR with 'Rs.' prefix and Indian grouping", () => {
+    expect(formatCents(1250, "INR")).toBe("Rs. 12.50");
+    expect(formatCents(0, "INR")).toBe("Rs. 0.00");
+    // 1,00,000 = one lakh, with Indian comma grouping (not en-US 100,000)
+    expect(formatCents(10000000, "INR")).toBe("Rs. 1,00,000.00");
+  });
+
+  it("defaults to USD when currency omitted", () => {
+    expect(formatCents(1234)).toBe("$12.34");
+  });
+});
+
+describe("currencySymbol", () => {
+  it("returns $ for USD (and default)", () => {
+    expect(currencySymbol("USD")).toBe("$");
+    expect(currencySymbol()).toBe("$");
+  });
+  it("returns Rs. for INR", () => {
+    expect(currencySymbol("INR")).toBe("Rs.");
   });
 });
 

@@ -7,10 +7,27 @@ export const runtime = "nodejs";
 // Payer-self claims: the bill creator marks items they're personally
 // covering. These count toward "fully covered" but no payee owes anything.
 // Auth: must be signed in AND be the bill's payer.
-const Schema = z.object({
-  short_id: z.string().min(3).max(20),
-  item_ids: z.array(z.string().uuid()).max(200),
-});
+const Schema = z
+  .object({
+    short_id: z.string().min(3).max(20),
+    // Preferred shape: per-item units (integer for qty>1, fractional for qty===1).
+    selections: z
+      .array(
+        z.object({
+          item_id: z.string().uuid(),
+          units: z.number().positive().max(10000),
+        })
+      )
+      .max(200)
+      .optional(),
+    // Legacy shape: full-units cover only. Kept so old clients keep working
+    // for at least one release after this lands.
+    item_ids: z.array(z.string().uuid()).max(200).optional(),
+  })
+  .refine(
+    (v) => (v.selections?.length ?? 0) > 0 || (v.item_ids?.length ?? 0) > 0,
+    { message: "Pick at least one item" }
+  );
 
 export async function POST(req: Request) {
   let body: unknown;
@@ -23,7 +40,7 @@ export async function POST(req: Request) {
   if (!parse.success) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
-  const { short_id, item_ids } = parse.data;
+  const { short_id, selections, item_ids } = parse.data;
 
   const ssr = await createClient();
   const {
@@ -69,6 +86,14 @@ export async function POST(req: Request) {
     .eq("is_payer_self", true)
     .maybeSingle();
 
+  // Normalize: prefer selections; fall back to legacy item_ids (full units).
+  const normalized: Array<{ item_id: string; units: number }> = selections
+    ? selections
+    : (item_ids ?? []).map((id) => {
+        const it = itemMap.get(id);
+        return { item_id: id, units: it?.quantity ?? 0 };
+      });
+
   let total = 0;
   const rows: Array<{
     item_id: string;
@@ -76,15 +101,19 @@ export async function POST(req: Request) {
     share_fraction: number;
     share_percent: number;
   }> = [];
-  for (const id of item_ids) {
-    const it = itemMap.get(id);
+  for (const sel of normalized) {
+    const it = itemMap.get(sel.item_id);
     if (!it) continue;
-    total += it.price_cents * it.quantity;
+    // Clamp: never claim more units than the line has.
+    const units = Math.min(sel.units, it.quantity);
+    if (units <= 0) continue;
+    total += Math.round(it.price_cents * units);
     rows.push({
-      item_id: id,
-      units: it.quantity,
-      share_fraction: 1,
-      share_percent: 100,
+      item_id: sel.item_id,
+      units: Number(units.toFixed(4)),
+      share_fraction: Number((units / it.quantity).toFixed(4)),
+      // share_percent kept for legacy readers; snap to nearest 25% bucket.
+      share_percent: Math.round((units / it.quantity) * 100),
     });
   }
 

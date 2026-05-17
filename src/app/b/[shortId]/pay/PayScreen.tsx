@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatCents } from "@/lib/money";
+// PayScreen reads currency from bill.payer.country indirectly via bill.currency.
 import {
   venmoUrl,
   cashAppUrl,
@@ -28,6 +29,7 @@ export function PayScreen({
   const [paid, setPaid] = useState(!!initialPaidAt);
   const confirmed = !!initialConfirmedAt;
   const [zelleCopied, setZelleCopied] = useState(false);
+  const currency = bill.currency;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -69,7 +71,7 @@ export function PayScreen({
     <div className="reveal mt-2">
       <div className="text-[var(--color-muted)] text-sm">You owe</div>
       <div className="font-display text-5xl mt-1 text-[var(--color-ink)] font-mono">
-        {formatCents(amountCents)}
+        {formatCents(amountCents, currency)}
       </div>
       <div className="text-[var(--color-muted)] mt-2">
         to {bill.payer.display_name}
@@ -90,7 +92,7 @@ export function PayScreen({
               className="tap flex items-center justify-between px-5 py-4 rounded-[var(--radius-md)] bg-[#1A73E8] text-white font-medium shadow-[var(--shadow-soft)]"
             >
               <span>Pay on Google Pay</span>
-              <span className="font-mono">{formatCents(amountCents)}</span>
+              <span className="font-mono">{formatCents(amountCents, currency)}</span>
             </a>
             <a
               href={upiUrl({
@@ -108,7 +110,7 @@ export function PayScreen({
                   PhonePe, BHIM, Amazon Pay, etc.
                 </div>
               </span>
-              <span className="font-mono">{formatCents(amountCents)}</span>
+              <span className="font-mono">{formatCents(amountCents, currency)}</span>
             </a>
           </>
         ) : null}
@@ -125,7 +127,7 @@ export function PayScreen({
             className="tap flex items-center justify-between px-5 py-4 rounded-[var(--radius-md)] bg-[#00BAF2] text-white font-medium shadow-[var(--shadow-soft)]"
           >
             <span>Pay on PayTM</span>
-            <span className="font-mono">{formatCents(amountCents)}</span>
+            <span className="font-mono">{formatCents(amountCents, currency)}</span>
           </a>
         ) : null}
 
@@ -140,7 +142,7 @@ export function PayScreen({
             className="tap flex items-center justify-between px-5 py-4 rounded-[var(--radius-md)] bg-[#3D95CE] text-white font-medium shadow-[var(--shadow-soft)]"
           >
             <span>Pay on Venmo</span>
-            <span className="font-mono">{formatCents(amountCents)}</span>
+            <span className="font-mono">{formatCents(amountCents, currency)}</span>
           </a>
         ) : null}
 
@@ -154,7 +156,7 @@ export function PayScreen({
             className="tap flex items-center justify-between px-5 py-4 rounded-[var(--radius-md)] bg-[#00D54B] text-white font-medium shadow-[var(--shadow-soft)]"
           >
             <span>Pay on Cash App</span>
-            <span className="font-mono">{formatCents(amountCents)}</span>
+            <span className="font-mono">{formatCents(amountCents, currency)}</span>
           </a>
         ) : null}
 
@@ -175,7 +177,7 @@ export function PayScreen({
                   : `Tap to copy: ${bill.payer.zelle_contact}`}
               </div>
             </span>
-            <span className="font-mono">{formatCents(amountCents)}</span>
+            <span className="font-mono">{formatCents(amountCents, currency)}</span>
           </button>
         ) : null}
       </div>

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatCents } from "@/lib/money";
+import { currencySymbol, formatCents, type Currency } from "@/lib/money";
 import { MoneyInput } from "@/components/MoneyInput";
 import { QuantityInput } from "@/components/QuantityInput";
+import { ItemUnitsPicker } from "@/components/ItemUnitsPicker";
 import { createBillAction } from "./actions";
 
 type DraftItem = {
@@ -31,8 +32,9 @@ type CreatedItem = {
   quantity: number;
 };
 
-export function NewBillFlow() {
+export function NewBillFlow({ currency = "USD" }: { currency?: Currency } = {}) {
   const router = useRouter();
+  const symbol = currencySymbol(currency);
   const [stage, setStage] = useState<
     "upload" | "loading" | "validate" | "cover" | "done"
   >("upload");
@@ -41,7 +43,11 @@ export function NewBillFlow() {
   const [pending, startTransition] = useTransition();
   const [doneShortId, setDoneShortId] = useState<string | null>(null);
   const [createdItems, setCreatedItems] = useState<CreatedItem[]>([]);
-  const [coveredIds, setCoveredIds] = useState<Set<string>>(new Set());
+  // Map of item_id -> covered units. For qty>1: integer count.
+  // For qty===1: fractional share (0.25, 0.5, 0.75, 1).
+  const [coveredUnits, setCoveredUnits] = useState<Map<string, number>>(
+    new Map()
+  );
   const [savingCover, setSavingCover] = useState(false);
   const [copied, setCopied] = useState(false);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -260,11 +266,11 @@ export function NewBillFlow() {
     });
   }
 
-  function toggleCovered(itemId: string) {
-    setCoveredIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
+  function setCoveredUnit(itemId: string, units: number) {
+    setCoveredUnits((prev) => {
+      const next = new Map(prev);
+      if (units <= 0) next.delete(itemId);
+      else next.set(itemId, units);
       return next;
     });
   }
@@ -272,7 +278,10 @@ export function NewBillFlow() {
   async function submitCover(skip: boolean) {
     if (!doneShortId) return;
     setError(null);
-    if (skip || coveredIds.size === 0) {
+    const selections = Array.from(coveredUnits.entries())
+      .filter(([, u]) => u > 0)
+      .map(([item_id, units]) => ({ item_id, units }));
+    if (skip || selections.length === 0) {
       setStage("done");
       return;
     }
@@ -283,7 +292,7 @@ export function NewBillFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           short_id: doneShortId,
-          item_ids: Array.from(coveredIds),
+          selections,
         }),
       });
       if (!res.ok) {
@@ -337,64 +346,63 @@ export function NewBillFlow() {
   }
 
   if (stage === "cover" && doneShortId) {
-    const coveredTotal = createdItems
-      .filter((it) => coveredIds.has(it.id))
-      .reduce((s, it) => s + it.price_cents * it.quantity, 0);
+    const coveredTotal = createdItems.reduce((s, it) => {
+      const u = coveredUnits.get(it.id) ?? 0;
+      return s + Math.round(it.price_cents * u);
+    }, 0);
+    const coveredCount = Array.from(coveredUnits.values()).filter(
+      (u) => u > 0
+    ).length;
     return (
-      <div className="reveal mt-6 space-y-5 pb-32">
+      <div className="reveal mt-6 space-y-5 pb-40">
         <div>
           <div className="font-display text-3xl text-[var(--color-ink)]">
             Anything you&apos;re covering?
           </div>
           <p className="text-[var(--color-muted)] mt-1 text-sm">
-            Tap items you&apos;re paying for yourself — drinks you bought,
-            things nobody else ordered. They won&apos;t show up as claimable
-            on the share page.
+            Pick how much of each item you&apos;re paying for yourself — for
+            multi-quantity lines, pick the count; otherwise pick a share.
+            Covered items won&apos;t show up as claimable on the share page.
           </p>
         </div>
 
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {createdItems.map((it) => {
-            const checked = coveredIds.has(it.id);
+            const u = coveredUnits.get(it.id) ?? 0;
+            const lineCents = Math.round(it.price_cents * u);
             return (
-              <li key={it.id}>
-                <button
-                  type="button"
-                  onClick={() => toggleCovered(it.id)}
-                  aria-pressed={checked}
-                  className={`tap w-full flex items-center justify-between gap-3 px-4 py-3 rounded-[var(--radius-md)] border text-left ${
-                    checked
-                      ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
-                      : "bg-[var(--color-surface)] text-[var(--color-ink)] border-[var(--color-divider)]"
-                  }`}
-                >
-                  <span className="flex items-center gap-3 min-w-0">
-                    <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                        checked
-                          ? "border-white bg-white text-[var(--color-accent)]"
-                          : "border-[var(--color-divider)]"
-                      }`}
-                    >
-                      {checked ? "✓" : ""}
-                    </span>
-                    <span className="truncate">
+              <li
+                key={it.id}
+                className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">
                       {it.name}
                       {it.quantity > 1 ? (
-                        <span
-                          className={`ml-1 text-xs ${
-                            checked ? "opacity-80" : "text-[var(--color-muted)]"
-                          }`}
-                        >
+                        <span className="ml-1 text-xs text-[var(--color-muted)]">
                           × {it.quantity}
                         </span>
                       ) : null}
-                    </span>
+                    </div>
+                    {u > 0 ? (
+                      <div className="text-xs text-[var(--color-muted)] mt-0.5">
+                        Covering {formatCents(lineCents, currency)}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span className="font-mono text-sm text-[var(--color-muted)] whitespace-nowrap">
+                    {formatCents(it.price_cents * it.quantity, currency)}
                   </span>
-                  <span className="font-mono whitespace-nowrap">
-                    {formatCents(it.price_cents * it.quantity)}
-                  </span>
-                </button>
+                </div>
+                <div className="mt-2">
+                  <ItemUnitsPicker
+                    quantity={it.quantity}
+                    units={u}
+                    onChange={(units) => setCoveredUnit(it.id, units)}
+                    ariaLabel={`Covering ${it.name}`}
+                  />
+                </div>
               </li>
             );
           })}
@@ -408,7 +416,9 @@ export function NewBillFlow() {
           <div className="max-w-xl mx-auto">
             <div className="flex justify-between text-sm text-[var(--color-muted)]">
               <span>You&apos;re covering</span>
-              <span className="font-mono">{formatCents(coveredTotal)}</span>
+              <span className="font-mono">
+                {formatCents(coveredTotal, currency)}
+              </span>
             </div>
             <button
               type="button"
@@ -418,8 +428,8 @@ export function NewBillFlow() {
             >
               {savingCover
                 ? "Saving…"
-                : coveredIds.size > 0
-                  ? `Continue — covering ${coveredIds.size} item${coveredIds.size === 1 ? "" : "s"}`
+                : coveredCount > 0
+                  ? `Continue — covering ${coveredCount} item${coveredCount === 1 ? "" : "s"}`
                   : "Continue without covering anything"}
             </button>
             <button
@@ -520,7 +530,7 @@ export function NewBillFlow() {
                 placeholder="Item name"
                 className="flex-1 px-2 py-2 bg-transparent focus:outline-none"
               />
-              <span className="text-[var(--color-muted)] font-mono">$</span>
+              <span className="text-[var(--color-muted)] font-mono">{symbol}</span>
               <MoneyInput
                 cents={it.price_cents}
                 onChange={(c) => update(idx, { price_cents: c })}
@@ -578,11 +588,13 @@ export function NewBillFlow() {
           label="Tax"
           cents={draft.tax_cents}
           onChange={(c) => setDraft((d) => (d ? { ...d, tax_cents: c } : d))}
+          symbol={symbol}
         />
         <DollarField
           label="Tip"
           cents={draft.tip_cents}
           onChange={(c) => setDraft((d) => (d ? { ...d, tip_cents: c } : d))}
+          symbol={symbol}
         />
       </div>
 
@@ -594,11 +606,11 @@ export function NewBillFlow() {
         <div className="max-w-xl mx-auto">
           <div className="flex justify-between text-sm text-[var(--color-muted)]">
             <span>Subtotal</span>
-            <span className="font-mono">{formatCents(subtotal)}</span>
+            <span className="font-mono">{formatCents(subtotal, currency)}</span>
           </div>
           <div className="flex justify-between text-base mt-1">
             <span className="font-medium">Total</span>
-            <span className="font-mono font-medium">{formatCents(total)}</span>
+            <span className="font-mono font-medium">{formatCents(total, currency)}</span>
           </div>
           <button
             type="button"
@@ -618,16 +630,18 @@ function DollarField({
   label,
   cents,
   onChange,
+  symbol,
 }: {
   label: string;
   cents: number;
   onChange: (c: number) => void;
+  symbol: string;
 }) {
   return (
     <label className="block w-full">
       <span className="text-xs text-[var(--color-muted)]">{label}</span>
       <div className="mt-1 flex items-center w-full px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-divider)] focus-within:border-[var(--color-accent)]">
-        <span className="text-[var(--color-muted)] font-mono">$</span>
+        <span className="text-[var(--color-muted)] font-mono">{symbol}</span>
         <MoneyInput
           cents={cents}
           onChange={onChange}

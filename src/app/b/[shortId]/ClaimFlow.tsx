@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { calculateClaimerTotal, formatCents } from "@/lib/money";
+import { calculateClaimerTotal, formatCents, type Currency } from "@/lib/money";
 import { MoneyInput } from "@/components/MoneyInput";
 import type { PublicBill } from "@/lib/types";
 
@@ -48,6 +48,7 @@ export function ClaimFlow({
 
 function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
   const router = useRouter();
+  const currency: Currency = bill.currency;
   const [sessionId, setSessionId] = useState("");
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("items");
@@ -166,7 +167,7 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
       <div className="mt-2">
         <div className="font-display text-2xl text-[var(--color-ink)]">
           {bill.payer.display_name} paid{" "}
-          <span className="font-mono">{formatCents(bill.total_cents)}</span>
+          <span className="font-mono">{formatCents(bill.total_cents, currency)}</span>
         </div>
         {bill.restaurant_name ? (
           <div className="text-[var(--color-muted)] mt-0.5">
@@ -189,6 +190,7 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
         <CoverageBanner
           claimed={bill.claimed_total_cents}
           total={bill.total_cents}
+          currency={currency}
         />
       ) : null}
 
@@ -258,7 +260,7 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
                           </div>
                         </div>
                         <span className="font-mono">
-                          {formatCents(it.price_cents * it.quantity)}
+                          {formatCents(it.price_cents * it.quantity, currency)}
                         </span>
                       </div>
                     </div>
@@ -318,7 +320,7 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
                           </div>
                         </div>
                         <span className="font-mono">
-                          {formatCents(it.price_cents * it.quantity)}
+                          {formatCents(it.price_cents * it.quantity, currency)}
                         </span>
                       </div>
                     </button>
@@ -345,7 +347,8 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
                               </span>
                               <span className="text-white/70 ml-2 font-mono">
                                 {formatCents(
-                                  Math.round(it.price_cents * (units ?? 0))
+                                  Math.round(it.price_cents * (units ?? 0)),
+                                  currency
                                 )}
                               </span>
                             </div>
@@ -438,7 +441,7 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
           <div className="flex justify-between items-baseline">
             <span className="text-sm text-[var(--color-muted)]">You owe</span>
             <span className="font-mono font-display text-2xl text-[var(--color-ink)]">
-              {formatCents(total)}
+              {formatCents(total, currency)}
             </span>
           </div>
           <button
@@ -464,6 +467,7 @@ function PayeeClaimFlow({ bill }: { bill: PublicBill }) {
 // Toggling commits a single is_payer_self claim row server-side.
 function PayerSelfCoverFlow({ bill }: { bill: PublicBill }) {
   const router = useRouter();
+  const currency: Currency = bill.currency;
   const [covered, setCovered] = useState<Set<string>>(
     () => new Set(bill.items.filter((i) => i.covered_by_payer).map((i) => i.id))
   );
@@ -512,7 +516,7 @@ function PayerSelfCoverFlow({ bill }: { bill: PublicBill }) {
       <div className="mt-2">
         <div className="font-display text-2xl text-[var(--color-ink)]">
           Your bill —{" "}
-          <span className="font-mono">{formatCents(bill.total_cents)}</span>
+          <span className="font-mono">{formatCents(bill.total_cents, currency)}</span>
         </div>
         {bill.restaurant_name ? (
           <div className="text-[var(--color-muted)] mt-0.5">
@@ -529,6 +533,7 @@ function PayerSelfCoverFlow({ bill }: { bill: PublicBill }) {
         <CoverageBanner
           claimed={bill.claimed_total_cents}
           total={bill.total_cents}
+          currency={currency}
         />
       ) : null}
 
@@ -571,7 +576,7 @@ function PayerSelfCoverFlow({ bill }: { bill: PublicBill }) {
                     </div>
                   </div>
                   <span className="font-mono">
-                    {formatCents(it.price_cents * it.quantity)}
+                    {formatCents(it.price_cents * it.quantity, currency)}
                   </span>
                 </div>
               </button>
@@ -591,7 +596,7 @@ function PayerSelfCoverFlow({ bill }: { bill: PublicBill }) {
               Covering yourself
             </span>
             <span className="font-mono font-display text-2xl text-[var(--color-ink)]">
-              {formatCents(coveredCents)}
+              {formatCents(coveredCents, currency)}
             </span>
           </div>
           <button
@@ -611,9 +616,11 @@ function PayerSelfCoverFlow({ bill }: { bill: PublicBill }) {
 function CoverageBanner({
   claimed,
   total,
+  currency,
 }: {
   claimed: number;
   total: number;
+  currency: Currency;
 }) {
   if (total <= 0) return null;
   const pct = Math.min(100, Math.round((claimed / total) * 100));
@@ -624,7 +631,7 @@ function CoverageBanner({
         <span>
           {fullyCovered
             ? "Fully covered — thanks!"
-            : `${formatCents(claimed)} of ${formatCents(total)} covered`}
+            : `${formatCents(claimed, currency)} of ${formatCents(total, currency)} covered`}
         </span>
         <span className="font-mono">{pct}%</span>
       </div>

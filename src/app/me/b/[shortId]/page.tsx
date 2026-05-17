@@ -39,11 +39,13 @@ export default async function BillReviewPage({
   const { data: bill } = await supabase
     .from("bills")
     .select(
-      "id, short_id, restaurant_name, total_cents, status, payer_id"
+      "id, short_id, restaurant_name, total_cents, currency, status, payer_id"
     )
     .eq("short_id", shortId)
     .maybeSingle();
   if (!bill || bill.payer_id !== payer.id) notFound();
+  const currency =
+    (bill as { currency?: string | null }).currency === "INR" ? "INR" : "USD";
 
   const { data: claimsData } = await supabase
     .from("claims")
@@ -59,6 +61,7 @@ export default async function BillReviewPage({
     <AppShell back="/me" title={bill.restaurant_name ?? "Bill"}>
       <ClaimReview
         billTotal={bill.total_cents}
+        currency={currency}
         shortId={bill.short_id}
         claims={claims}
       />

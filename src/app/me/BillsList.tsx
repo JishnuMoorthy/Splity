@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { Currency } from "@/lib/money";
 import { BillCard } from "./BillCard";
 
 export type BillRow = {
@@ -8,6 +9,7 @@ export type BillRow = {
   short_id: string;
   restaurant_name: string | null;
   total_cents: number;
+  currency: Currency;
   created_at: string;
   receipt_path: string | null;
   claimed_cents: number;

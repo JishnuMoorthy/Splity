@@ -27,10 +27,14 @@ export default async function EditBillPage({
 
   const { data: bill } = await supabase
     .from("bills")
-    .select("id, short_id, restaurant_name, tax_cents, tip_cents, payer_id")
+    .select(
+      "id, short_id, restaurant_name, tax_cents, tip_cents, currency, payer_id"
+    )
     .eq("short_id", shortId)
     .maybeSingle();
   if (!bill || bill.payer_id !== payer.id) notFound();
+  const currency =
+    (bill as { currency?: string | null }).currency === "INR" ? "INR" : "USD";
 
   const { data: items } = await supabase
     .from("bill_items")
@@ -66,6 +70,7 @@ export default async function EditBillPage({
         <EditBillFlow
           billId={bill.id}
           shortId={bill.short_id}
+          currency={currency}
           initial={{
             restaurant_name: bill.restaurant_name ?? "",
             tax_cents: bill.tax_cents,

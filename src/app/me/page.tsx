@@ -24,7 +24,9 @@ export default async function MePage() {
 
   const { data: billsRaw } = await supabase
     .from("bills")
-    .select("id, short_id, restaurant_name, total_cents, created_at, status, receipt_path")
+    .select(
+      "id, short_id, restaurant_name, total_cents, currency, created_at, status, receipt_path"
+    )
     .eq("payer_id", payer.id)
     .order("created_at", { ascending: false });
 

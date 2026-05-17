@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatCents } from "@/lib/money";
+import { currencySymbol, formatCents, type Currency } from "@/lib/money";
 import { MoneyInput } from "@/components/MoneyInput";
 import { QuantityInput } from "@/components/QuantityInput";
 import { updateBillAction } from "@/app/me/actions";
@@ -26,12 +26,15 @@ export function EditBillFlow({
   billId,
   shortId,
   initial,
+  currency = "USD",
 }: {
   billId: string;
   shortId: string;
   initial: Initial;
+  currency?: Currency;
 }) {
   const router = useRouter();
+  const symbol = currencySymbol(currency);
   const [draft, setDraft] = useState<Initial>(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -121,7 +124,7 @@ export function EditBillFlow({
                 placeholder="Item name"
                 className="flex-1 px-2 py-2 bg-transparent focus:outline-none"
               />
-              <span className="text-[var(--color-muted)] font-mono">$</span>
+              <span className="text-[var(--color-muted)] font-mono">{symbol}</span>
               <MoneyInput
                 cents={it.price_cents}
                 onChange={(c) => update(idx, { price_cents: c })}
@@ -177,11 +180,13 @@ export function EditBillFlow({
           label="Tax"
           cents={draft.tax_cents}
           onChange={(c) => setDraft((d) => ({ ...d, tax_cents: c }))}
+          symbol={symbol}
         />
         <DollarField
           label="Tip"
           cents={draft.tip_cents}
           onChange={(c) => setDraft((d) => ({ ...d, tip_cents: c }))}
+          symbol={symbol}
         />
       </div>
 
@@ -193,11 +198,11 @@ export function EditBillFlow({
         <div className="max-w-xl mx-auto">
           <div className="flex justify-between text-sm text-[var(--color-muted)]">
             <span>Subtotal</span>
-            <span className="font-mono">{formatCents(subtotal)}</span>
+            <span className="font-mono">{formatCents(subtotal, currency)}</span>
           </div>
           <div className="flex justify-between text-base mt-1">
             <span className="font-medium">Total</span>
-            <span className="font-mono font-medium">{formatCents(total)}</span>
+            <span className="font-mono font-medium">{formatCents(total, currency)}</span>
           </div>
           <button
             type="button"
@@ -217,16 +222,18 @@ function DollarField({
   label,
   cents,
   onChange,
+  symbol,
 }: {
   label: string;
   cents: number;
   onChange: (c: number) => void;
+  symbol: string;
 }) {
   return (
     <label className="block w-full">
       <span className="text-xs text-[var(--color-muted)]">{label}</span>
       <div className="mt-1 flex items-center w-full px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] border border-[var(--color-divider)] focus-within:border-[var(--color-accent)]">
-        <span className="text-[var(--color-muted)] font-mono">$</span>
+        <span className="text-[var(--color-muted)] font-mono">{symbol}</span>
         <MoneyInput
           cents={cents}
           onChange={onChange}

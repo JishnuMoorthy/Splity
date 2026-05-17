@@ -14,14 +14,17 @@ export default async function NewBillPage() {
 
   const { data: payer } = await supabase
     .from("payers")
-    .select("id")
+    .select("id, country")
     .eq("user_id", user.id)
     .maybeSingle();
   if (!payer) redirect("/me/payment-methods?first=1");
 
+  const currency =
+    (payer as { country?: string | null }).country === "IN" ? "INR" : "USD";
+
   return (
     <AppShell back="/me" title="New receipt">
-      <NewBillFlow />
+      <NewBillFlow currency={currency} />
     </AppShell>
   );
 }

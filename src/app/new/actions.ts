@@ -32,11 +32,12 @@ export async function createBillAction(payloadJson: string) {
 
   const { data: payer, error: payerErr } = await supabase
     .from("payers")
-    .select("id")
+    .select("id, country")
     .eq("user_id", user.id)
     .maybeSingle();
   if (payerErr) return { error: `Payer lookup failed: ${payerErr.message}` };
   if (!payer) return { error: "Set up payment methods first.", redirect: "/me/payment-methods?first=1" };
+  const currency = (payer as { country?: string | null }).country === "IN" ? "INR" : "USD";
 
   let parsed: z.infer<typeof CreateBillSchema>;
   try {
@@ -68,6 +69,7 @@ export async function createBillAction(payloadJson: string) {
       tax_cents: parsed.tax_cents,
       tip_cents: parsed.tip_cents,
       total_cents: parsed.total_cents,
+      currency,
     })
     .select("id, short_id")
     .single();

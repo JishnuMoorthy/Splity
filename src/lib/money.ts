@@ -13,13 +13,29 @@ export function calculateClaimerTotal(
   return claimerSubtotalCents + claimerTax + claimerTip;
 }
 
-const FORMATTER = new Intl.NumberFormat("en-US", {
+export type Currency = "USD" | "INR";
+
+const USD_FORMATTER = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
 
-export function formatCents(cents: number): string {
-  return FORMATTER.format(cents / 100);
+// INR: the user explicitly asked for the "Rs." prefix (rather than ₹). Use
+// en-IN grouping so 100,000 renders as 1,00,000 — the Indian lakh format.
+const INR_NUMBER = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export function currencySymbol(currency: Currency = "USD"): string {
+  return currency === "INR" ? "Rs." : "$";
+}
+
+export function formatCents(cents: number, currency: Currency = "USD"): string {
+  if (currency === "INR") {
+    return `Rs. ${INR_NUMBER.format(cents / 100)}`;
+  }
+  return USD_FORMATTER.format(cents / 100);
 }
 
 export function dollarsToCents(input: string | number): number {
