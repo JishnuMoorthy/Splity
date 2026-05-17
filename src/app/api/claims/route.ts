@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/server";
-import { calculateClaimerTotal } from "@/lib/money";
+import { calculateClaimerTotal, type Currency } from "@/lib/money";
+import { sendPayerNudge } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -246,14 +247,40 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
   const sb = createServiceClient();
-  const { data: claim } = await sb
+  // Pull enough context to (a) authorize the update and (b) compose the
+  // payer-nudge email if paid_at flips from null -> set.
+  const { data: claimRaw } = await sb
     .from("claims")
-    .select("id, claimer_session_id")
+    .select(
+      `
+      id, claimer_session_id, claimer_name, total_cents, paid_at, is_payer_self,
+      bill:bills (
+        short_id, restaurant_name, currency,
+        payer:payers (display_name, email)
+      )
+      `
+    )
     .eq("id", parse.data.claim_id)
     .maybeSingle();
-  if (!claim || claim.claimer_session_id !== parse.data.claimer_session_id) {
+  if (!claimRaw || claimRaw.claimer_session_id !== parse.data.claimer_session_id) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
+  const claim = claimRaw as unknown as {
+    id: string;
+    claimer_session_id: string;
+    claimer_name: string | null;
+    total_cents: number;
+    paid_at: string | null;
+    is_payer_self: boolean;
+    bill: {
+      short_id: string;
+      restaurant_name: string | null;
+      currency: Currency | null;
+      payer: { display_name: string; email: string | null };
+    };
+  };
+
+  const wasUnpaid = !claim.paid_at;
   const { error } = await sb
     .from("claims")
     .update({
@@ -262,5 +289,29 @@ export async function PATCH(req: Request) {
     })
     .eq("id", parse.data.claim_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Fire-and-forget: send a payer nudge only on the unpaid->paid transition,
+  // and never for the payer's own self-claim. Failures are logged, not
+  // surfaced to the payee — they shouldn't block the UI.
+  if (
+    parse.data.paid &&
+    wasUnpaid &&
+    !claim.is_payer_self &&
+    claim.bill.payer.email
+  ) {
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
+    void sendPayerNudge({
+      to: claim.bill.payer.email,
+      payerName: claim.bill.payer.display_name,
+      claimerName: claim.claimer_name ?? "Someone",
+      amountCents: claim.total_cents,
+      currency: claim.bill.currency ?? "USD",
+      method: parse.data.payment_method,
+      restaurantName: claim.bill.restaurant_name,
+      reviewUrl: `${appUrl}/me/b/${claim.bill.short_id}`,
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }

@@ -1,0 +1,83 @@
+<!--
+  Splity magic-link / OTP email template.
+
+  Paste this into:
+    Supabase Dashboard -> Authentication -> Email Templates -> "Magic Link"
+    (and copy the "Subject" below into the Subject field)
+
+  Available template variables:
+    {{ .Token }}             - 6-digit code
+    {{ .ConfirmationURL }}   - the magic-link URL
+    {{ .Email }}             - the user's email
+    {{ .SiteURL }}           - site URL
+
+  Subject:
+    Your Splity sign-in code: {{ .Token }}
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in to Splity</title>
+  </head>
+  <body style="margin:0; padding:0; background:#F5F1E8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color:#0E1A33;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#F5F1E8; padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:480px; background:#FFFFFF; border-radius:18px; padding:32px; box-shadow:0 1px 3px rgba(14,26,51,0.08);">
+            <tr>
+              <td>
+                <div style="font-family: Georgia, 'Times New Roman', serif; font-size:28px; font-weight:600; letter-spacing:-0.02em; color:#0E1A33;">
+                  Splity
+                </div>
+
+                <h1 style="font-family: Georgia, 'Times New Roman', serif; font-size:24px; font-weight:500; margin:24px 0 8px 0; color:#0E1A33;">
+                  Hi there — let's get you signed in.
+                </h1>
+                <p style="font-size:15px; line-height:1.5; color:#5B6478; margin:0 0 24px 0;">
+                  Pick either method below. Both work; the code is handier
+                  when you're checking email on a different device than where
+                  you'll use Splity.
+                </p>
+
+                <div style="background:#F5F1E8; border-radius:12px; padding:20px; margin-bottom:16px;">
+                  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#5B6478; margin-bottom:8px;">
+                    One-time code
+                  </div>
+                  <div style="font-family: 'SF Mono', Menlo, Consolas, monospace; font-size:32px; letter-spacing:0.25em; font-weight:600; color:#0E1A33;">
+                    {{ .Token }}
+                  </div>
+                  <div style="font-size:12px; color:#5B6478; margin-top:8px;">
+                    Type this into the Splity sign-in screen. Expires in 1 hour.
+                  </div>
+                </div>
+
+                <div style="background:#F5F1E8; border-radius:12px; padding:20px; margin-bottom:24px;">
+                  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#5B6478; margin-bottom:12px;">
+                    One-tap magic link
+                  </div>
+                  <a href="{{ .ConfirmationURL }}" style="display:inline-block; background:#1E3A8A; color:#FFFFFF; text-decoration:none; padding:12px 24px; border-radius:999px; font-size:15px; font-weight:500;">
+                    Sign in to Splity
+                  </a>
+                  <div style="font-size:12px; color:#5B6478; margin-top:12px;">
+                    Tap from the same browser you typed your email in.
+                  </div>
+                </div>
+
+                <p style="font-size:12px; color:#5B6478; line-height:1.5; margin:0;">
+                  Didn't ask for this? You can ignore this email. Nobody can
+                  sign in without the code or link above.
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <div style="font-size:11px; color:#5B6478; margin-top:16px;">
+            Splity · Made for Friends
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
